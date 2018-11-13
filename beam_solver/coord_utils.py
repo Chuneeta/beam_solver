@@ -6,6 +6,7 @@ hera_lat = '-30:43:17'
 hera_lon = '21:25:40.08'
 hera = ephem.Observer()
 hera.lat, hera.long, hera.elevation = hera_lat, hera_lon, 0.0
+j0 = ephem.julian_date(0)
 
 def deg2hms(ra):
     """
@@ -103,12 +104,14 @@ def rajd2ha(ra, jd):
     lst = hera.sidereal_time()
     ha = lst - ra_r
 
-    return lst, ha
+    return lst * 180/np.pi, ha * 180/np.pi
 
 def hadec2azalt(ha, dec, lat):
     """
     Calculates azimuth-altitude from hour angle and declination
 
+    Parameters
+    ----------
     ha : float
         Hour angle in degrees
     
@@ -117,6 +120,10 @@ def hadec2azalt(ha, dec, lat):
 
     lat : float
         Latitude of observer in degrees
+
+    Returns
+    -------
+    az, alt in degrees
     """
     
     cos_h = np.cos(ha * np.pi/180)
@@ -128,13 +135,25 @@ def hadec2azalt(ha, dec, lat):
 
     x = -1 * cos_h * cos_d * sin_l + sin_d * cos_l
     y = -1 * sin_h * cos_d  
-    z = cos_h * cos_d * cos_l + sin_d + sin_l
+    z = cos_h * cos_d * cos_l + sin_d * sin_l
     r = np.sqrt(x**2 + y**2)
 
-    az = np.arctan(y / x)
-    alt = np.arctan(z / r)
+    az = np.arctan2(y , x) * 180/np.pi
+    alt = np.arctan2(z , r) * 180/np.pi
     if az < 0: az += 360.
     
     return az, alt    
 
-    
+def radec2azalt(jd, ra, dec):
+    """
+    """
+        
+    hera.date = jd - j0 
+    src=ephem.FixedBody()
+    src._ra = ra * np.pi/180.
+    src._dec = dec * np.pi/180.
+    src.compute(hera)  
+    az = src.az
+    alt = src.alt
+
+    return az * 180/np.pi, alt * 180/np.pi  
