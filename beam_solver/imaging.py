@@ -40,7 +40,7 @@ class Imaging(object):
         print ('Phasing visibilities to {}'.format(phs_time))
         uvd.phase_to_time(Time(phs_time, format='jd', scale='utc')
 
-        print ('Converting {} to {}'.format(self, self.ms))    
+        #print ('Converting {} to {}'.format(self, self.ms))    
         # converting to uvfits
         uvfits_name = self + '.uvfits'
         uvd.write_uvfits(uvfits_name, spoof_nonessential=True)
