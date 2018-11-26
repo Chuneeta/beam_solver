@@ -38,7 +38,7 @@ class Imaging(object):
         phs_time = times[0] if phs is None else phs
 
         print ('Phasing visibilities to {}'.format(phs_time))
-        uvd.phase_to_time(Time(phs_time, format='jd', scale='utc')
+        uvd.phase_to_time(Time(phs_time, format='jd', scale='utc'))
 
         #print ('Converting {} to {}'.format(self, self.ms))    
         # converting to uvfits

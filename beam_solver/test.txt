@@ -1,2 +1,0 @@
-# ra dec alts azs has beam
-34 56 {34,5,6} {45,6,7} {456,7}
