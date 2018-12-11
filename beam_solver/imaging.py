@@ -1,27 +1,22 @@
 import casa_utils as ct
-import extract as ct
 import pyuvdata
 from astropy.time import Time
 
 class Imaging(object):
-    
-    def __init__(self, dset=None, beam=None):
+    def __init__(self, dset=None):
         """
-        Dataset or miriad file visibilties and perform operations such as converting to MS format and generate images
+        Object to store measurement sets of Miriad files containing visibilities and perform operations
+        such as generating images.
     
         Parameters
         ----------
-        dset : Miriad file 
-            Miriad File  containing visibilities are required metadata.
-
-        beam : string, optional
-            Beam file containg the parameters and data for beam model
-
+        dset : str 
+            MS or Miriad file containing visibilities are required metadata.
         """
+        
         self.dset = dset
-        self.beam = beam
 
-    def convert_mset(self, phs=None):
+    def convert_mset(self, phs=None, del_uvfits=False):
         """
         Converts Miriad file to Measurement set
         
@@ -30,23 +25,27 @@ class Imaging(object):
         phs : float, optional
             Julian date at which to phase the visibilities. By default the visibilities are phased to first timestamp of the file
 
+        del_uvfits : boolean, optional
+            If True, deleted the uvfits file that is created during the conversion from uvfile to ms.
+            Default is False.
         """
-        self.ms = self + '.ms'
+
         uvd = pyuvdata.UVData()
-        uvd.read_miriad(self)
+        uvd.read_miriad(self.dset)
         times = uvd.time_array
         phs_time = times[0] if phs is None else phs
 
         print ('Phasing visibilities to {}'.format(phs_time))
         uvd.phase_to_time(Time(phs_time, format='jd', scale='utc'))
 
-        #print ('Converting {} to {}'.format(self, self.ms))    
         # converting to uvfits
-        uvfits_name = self + '.uvfits'
-        uvd.write_uvfits(uvfits_name, spoof_nonessential=True)
+        uvfits = self.dset + '.uvfits'
+        print ('Converting {} to {}'.format(self.dset, uvfits))
+        uvd.write_uvfits(uvfits, spoof_nonessential=True)
         
         # converting to mset
-        ct.uvfits2ms(uvfits, outfile=self.ms)
+        self.dset = self.dset + '.ms'
+        ct.uvfits2ms(uvfits, outfile=self.dset, delete=True)
  
     def imaging(self, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weigthing='uniform', start=200, stop=900, uvlength=0):
         """

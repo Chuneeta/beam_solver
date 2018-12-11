@@ -1,123 +1,126 @@
+import h5py
 import os
-from beam_solver import gencat as gc
-from beam_solver import catdata as cd
-from beam_solver import catbeam as cb
-from beam_solver import beamsolve as bs
-from beam_solver.data import DATA_PATH
 import numpy as np
 import nose.tools as nt
-import copy
+from beam_solver import catdata as cd
+from beam_solver import beam_utils as bt
+from beam_solver import beamsolve as bs
+from beam_solver.data import DATA_PATH
 
-# fitsfiles
+
+# beamfile
 beamfits = os.path.join(DATA_PATH, 'HERA_NF_dipole_power.beamfits')
+
+# xx fitsfiles
 fitsfile1_xx = os.path.join(DATA_PATH, '2458115.23736.xx.fits')
 fitsfile2_xx = os.path.join(DATA_PATH, '2458115.24482.xx.fits')
 fitsfiles_xx = [fitsfile1_xx, fitsfile2_xx]
+
+# yy fitsfiles
+fitsfile1_yy = os.path.join(DATA_PATH, '2458115.23736.yy.fits')
+fitsfile2_yy = os.path.join(DATA_PATH, '2458115.24482.yy.fits')
+fitsfiles_yy = [fitsfile1_yy, fitsfile2_yy]
 
 # right ascension and declination values
 ras = [30.01713089, 27.72922349, 36.75248962, 34.2415497, 78.3776346, 74.03785837]
 decs = [-30.88211818, -29.53377208, -30.63958257, -29.93990039, -30.48595805, -30.08651873]
 
-# generating catData object
-cat = gc.genCatBase(fitsfiles_xx, ras=ras, decs=decs)
-srcd = cat.gen_catalog()
-
 class Test_BeamSolveBase():
-    def test_init(self):
-        # checks input to the beamSolve class
-        bms = bs.BeamSolveBase(cat=srcd)
-        bms = bs.BeamSolveBase(cat=srcd, bm_pix='60')
-        nt.assert_raises(ValueError, bs.BeamSolveBase, srcd, 'a')       
-        
-    def test_mk_key(self):
-        pixel = 0 
-        srcid = 0
-        timeid = 0
-        bms = bs.BeamSolveBase(cat=srcd)
-        bms._mk_key(pixel, srcid, timeid)
-        bms._mk_key('0', srcid, timeid)
-        bms._mk_key(pixel, '0', timeid)
-        bms._mk_key(pixel, srcid, '0')
-        bms._mk_key(pixel, '0', timeid)
-        nt.assert_raises(ValueError, bms._mk_key, 'a', srcid, timeid)
-        nt.assert_raises(ValueError, bms._mk_key, pixel, 'a', timeid)
-        nt.assert_raises(ValueError, bms._mk_key, pixel, srcid, 'a')
-        
-    def test_unravel_key(self):
-        bms = bs.BeamSolveBase(cat=srcd)
-        bms.unravel_pix(60, (0, 0))
-        bms.unravel_pix('60', (0, 0))
-        bms.unravel_pix(60, [0, 0])
-        bms.unravel_pix(60, ('0', 0))
-        bms.unravel_pix(60, (0, '0'))
-        nt.assert_raises(ValueError, bms.unravel_pix, 'a', (0, 0))
-        nt.assert_raises(ValueError, bms.unravel_pix, 60, ('a', 0))
-        nt.assert_raises(ValueError, bms.unravel_pix, 60, (0, 'a'))
-
-    def test_get_weights(self):
-        bms = bs.BeamSolveBase(cat=srcd)
-        azalts = srcd.azalt_array[:, 0, :]
-        bms.get_weights(azalts)
-        nt.assert_raises(ValueError, bms.get_weights, azalts[0:1, :])
-
     def test_construct_linear_sys(self):
-        bms = bs.BeamSolveBase(cat=srcd)
-        nt.assert_raises(ValueError, bms.construct_linear_sys)
-        cbeam = cb.catBeamFits()
-        bm = cbeam.generate_beam(beamfits, 150e6, pol=['xx'])
-        srcd.calc_corrflux(beam=bm)
-        bms.construct_linear_sys()
-        bms.construct_linear_sys(flux_type='total')
-        nt.assert_raises(ValueError, bms.construct_linear_sys, flux_type='a')
-        srcd1 = copy.deepcopy(srcd)
-        srcd1.pcorr_array = np.ones((5,))
-        bms = bs.BeamSolveBase(cat=srcd1)
-        nt.assert_raises(AssertionError, bms.construct_linear_sys)
+        catd = cd.catData()
+        catd.gen_catalog(fitsfiles_xx, ras, decs)
+        beam = bt.get_fitsbeam(beamfits, 151e6)
+        corrflux = catd.calc_corrflux(beam, 'xx')
+        bms = bs.BeamSolveBase(cat=catd)
+        bms.construct_linear_sys(mflux=corrflux)
+        srcdict = catd.gen_catalog(fitsfiles_xx, ras, decs, return_data=True)
+        catd.gen_catalog(fitsfiles_xx, ras, decs)
+        beam = bt.get_fitsbeam(beamfits, 151e6)
+        corrflux = catd.calc_corrflux(beam, 'yy')
+        bms = bs.BeamSolveBase(cat=catd)
+        bms.construct_linear_sys(mflux=corrflux)
+        catd.gen_catalog(fitsfiles_yy, ras, decs)
+        beam = bt.get_fitsbeam(beamfits, 151e6)
+        corrflux = catd.calc_corrflux(beam, 'yy')
+        bms = bs.BeamSolveBase(cat=catd)
+        bms.construct_linear_sys(mflux=corrflux)
+        nt.assert_raises(IndexError, bms.construct_linear_sys)
+        nt.assert_raises(TypeError, bms.construct_linear_sys, 1.00)
+        nt.assert_raises(TypeError, bms.construct_linear_sys, '1.00')
+        nt.assert_raises(TypeError, bms.construct_linear_sys, ['1.00'])
+
+    def test_construct_nonlinear_sys(self):
+        catd = cd.catData()
+        catd.gen_catalog(fitsfiles_xx, ras, decs)
+        beam = bt.get_fitsbeam(beamfits, 151e6)
+        corrflux = catd.calc_corrflux(beam, 'xx')
+        bms = bs.BeamSolveBase(cat=catd)
+        bms.construct_nonlinear_sys(mflux=corrflux, bvals=np.zeros((60, 60)))
+        bms.construct_nonlinear_sys(mflux=corrflux, bvals=np.zeros((60, 60)), constrain=True)
+        nt.assert_raises(IndexError, bms.construct_nonlinear_sys, mflux=corrflux, bvals=np.zeros((30, 30))) 
+        nt.assert_raises(IndexError, bms.construct_nonlinear_sys, [], np.zeros((60, 60)))
+        nt.assert_raises(TypeError, bms.construct_nonlinear_sys, 1.00, np.zeros((60, 60)))
+        nt.assert_raises(IndexError, bms.construct_nonlinear_sys, '1.00', np.zeros((60, 60)))
+        nt.assert_raises(IndexError, bms.construct_nonlinear_sys, ['1.00'], np.zeros((60, 60)))
 
     def test_solve(self):
-        bms = bs.BeamSolveBase(cat=srcd)
-        cbeam = cb.catBeamFits()
-        bm = cbeam.generate_beam(beamfits, 150e6, pol=['xx'])
-        srcd.calc_corrflux(beam=bm)
-        bms.construct_linear_sys()
+        catd = cd.catData()
+        catd.gen_catalog(fitsfiles_xx, ras, decs)
+        beam = bt.get_fitsbeam(beamfits, 151e6)
+        corrflux = catd.calc_corrflux(beam, 'xx')
+        bms = bs.BeamSolveBase(cat=catd)
+        bms.construct_linear_sys(mflux=corrflux)
         bms.solve(solver='Linear')
-        nt.assert_raises(ValueError, bms.solve, 'Log')
+        bms.construct_nonlinear_sys(mflux=corrflux, bvals=np.zeros((60, 60)))
+        bms.solve(solver='LinProduct')
+        nt.assert_raises(AssertionError, bms.solve, solver='Linear')
 
-    def eval_sol(self):
-        bms = bs.BeamSolveBase(cat=srcd)
-        cbeam = cb.catBeamFits()
-        bm = cbeam.generate_beam(beamfits, 150e6, pol=['xx'])
-        srcd.calc_corrflux(beam=bm)
-        bms.construct_linear_sys()
-        sol = bms.solve(solver='Linear')
-        bms.eval_sol(sol)
-        nt.assert_raises(ValueError, bms.eval_sol, np.array([2,.0, 3.0, 4.0]))
+        catd = cd.catData()
+        catd.gen_catalog(fitsfiles_xx, [78.3776346, 74.03785837], [-30.48595805, -30.08651873])
+        beam = bt.get_fitsbeam(beamfits, 151e6)
+        corrflux = catd.calc_corrflux(beam, 'xx')
+        bms = bs.BeamSolveBase(cat=catd)
+        bms.construct_nonlinear_sys(mflux=corrflux, bvals=np.zeros((60, 60)), constrain=True)
+        nt.assert_raises(KeyError, bms.solve, solver='LinProduct')
 
-    def test_get_A(self):
-        bms = bs.BeamSolveBase(cat=srcd)
-        cbeam = cb.catBeamFits()
-        bm = cbeam.generate_beam(beamfits, 150e6, pol=['xx'])
-        srcd.calc_corrflux(beam=bm)
-        bms.construct_linear_sys()
-        sol = bms.solve(solver='Linear')
-        bms.get_A()
-      
-    def test_svd(self):
-        bms = bs.BeamSolveBase(cat=srcd)
-        cbeam = cb.catBeamFits()
-        bm = cbeam.generate_beam(beamfits, 150e6, pol=['xx'])
-        srcd.calc_corrflux(beam=bm)
-        bms.construct_linear_sys()
-        sol = bms.solve(solver='Linear')
-        A = bms.get_A()
-        bms.svd(A)
+class Test_BeamSolveCross():
+    def test_construct_linear_sys(self):
+        catd = cd.catData()
+        catd.gen_polcatalog(fitsfiles_xx, fitsfiles_yy, ras, decs)
+        beam_xx = bt.get_fitsbeam(beamfits, 151e6, 'xx')
+        beam_yy = bt.get_fitsbeam(beamfits, 151e6, 'yy')
+        corrflux_xx = catd.calc_corrflux(beam_xx, 'xx')
+        corrflux_yy = catd.calc_corrflux(beam_yy, 'yy')
+        bms = bs.BeamSolveCross(cat=catd)
+        bms.construct_linear_sys(mflux_xx=corrflux_xx, mflux_yy=corrflux_yy)
+        nt.assert_raises(IndexError, bms.construct_linear_sys, mflux_xx=[], mflux_yy=corrflux_yy)
+        nt.assert_raises(IndexError, bms.construct_linear_sys, mflux_xx=corrflux_xx, mflux_yy=[])
+        
+    def test_construct_nonlinear_sys(self):
+        catd = cd.catData()
+        catd.gen_polcatalog(fitsfiles_xx, fitsfiles_yy, ras, decs)
+        beam_xx = bt.get_fitsbeam(beamfits, 151e6, 'xx')
+        beam_yy = bt.get_fitsbeam(beamfits, 151e6, 'yy')
+        corrflux_xx = catd.calc_corrflux(beam_xx, 'xx')
+        corrflux_yy = catd.calc_corrflux(beam_yy, 'yy')
+        bms = bs.BeamSolveCross(cat=catd)
+        bms.construct_nonlinear_sys(mflux_xx=corrflux_xx, mflux_yy=corrflux_yy, bvals=np.zeros((60, 60)))
+        bms.construct_nonlinear_sys(mflux_xx=corrflux_xx, mflux_yy=corrflux_yy, bvals=np.zeros((60, 60)), constrain=True) 
+        nt.assert_raises(IndexError, bms.construct_nonlinear_sys, mflux_xx=[], mflux_yy=corrflux_yy, bvals=np.zeros((60, 60)))
+        nt.assert_raises(IndexError, bms.construct_nonlinear_sys, mflux_xx=corrflux_xx, mflux_yy=[], bvals=np.zeros((60, 60)))
+        nt.assert_raises(IndexError, bms.construct_nonlinear_sys, mflux_xx=corrflux_xx, mflux_yy=corrflux_yy, bvals=np.zeros((30, 30)))
 
-    def test_remove_degen(self):
-        bms = bs.BeamSolveBase(cat=srcd)
-        cbeam = cb.catBeamFits()
-        bm = cbeam.generate_beam(beamfits, 150e6, pol=['xx'])
-        srcd.calc_corrflux(beam=bm)
-        bms.construct_linear_sys()
-        sol = bms.solve(solver='Linear')
-        bms.remove_degen(sol)
-        nt.assert_raises(ValueError, bms.remove_degen, sol, 'a')
+    def test_solve(self):
+        catd = cd.catData()
+        catd.gen_polcatalog(fitsfiles_xx, fitsfiles_yy, ras, decs)
+        beam_xx = bt.get_fitsbeam(beamfits, 151e6, 'xx')
+        beam_yy = bt.get_fitsbeam(beamfits, 151e6, 'yy')
+        corrflux_xx = catd.calc_corrflux(beam_xx, 'xx')
+        corrflux_yy = catd.calc_corrflux(beam_yy, 'yy')
+        bms = bs.BeamSolveCross(cat=catd)
+        bms.construct_linear_sys(mflux_xx=corrflux_xx, mflux_yy=corrflux_yy)
+        bms.solve(solver='Linear')
+        nt.assert_raises(AttributeError, bms.solve, solver='LinProduct')
+        bms.construct_nonlinear_sys(mflux_xx=corrflux_xx, mflux_yy=corrflux_yy, bvals=np.zeros((60, 60)), constrain=True)
+        bms.solve(solver='LinProduct')
+        nt.assert_raises(AssertionError, bms.solve, solver='Linear')
