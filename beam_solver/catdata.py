@@ -15,7 +15,7 @@ class catData(object):
     """
     def __init__(self):
         self.data_array = None
-        self.az_alt_array = None
+        self.azalt_array = None
         self.ha_array = None
         self.pos_array = None
         self.err_array = None
@@ -63,11 +63,11 @@ class catData(object):
                     ra_c = np.append(ra_c, ras[i])
                     dec_c = np.append(dec_c, decs[i])
                     inds = np.append(inds, i)
-                    unq_ras = np.append(unq_ras, np.mean(ra_c))
-                    unq_decs = np.append(unq_decs, np.mean(dec_c))
-                    ras = np.delete(ras, inds)
-                    decs = np.delete(decs, inds)
-                    n = len(ras)
+            unq_ras = np.append(unq_ras, np.mean(ra_c))
+            unq_decs = np.append(unq_decs, np.mean(dec_c))
+            ras = np.delete(ras, inds)
+            decs = np.delete(decs, inds)
+            n = len(ras)
         print ('Found {} unique sources out of {}.'.format(len(unq_ras), n0))
         return unq_ras, unq_decs
 
@@ -125,9 +125,9 @@ class catData(object):
                 azalt_array[0, i, j] = az
                 azalt_array[1, i, j] = alt
             # saving to dictionary
-            srcdict[key]['data'] = data_array
-            srcdict[key]['error'] = err_array
-            srcdict[key]['ha'] = ha_array
+            srcdict[key]['data'] = data_array[:, i,  :]
+            srcdict[key]['error'] = err_array[:, i, :]
+            srcdict[key]['ha'] = ha_array[i, :]
         # saving attributes to object
         self.data_array = data_array
         self.err_array = err_array
@@ -180,13 +180,13 @@ class catData(object):
         nfits = len(fitsfiles_xx)
         # initializating source dict and numpy arrays
         srcdict = OrderedDict()
-        pos_array = np.ndarray([])
+        pos_array = np.zeros((2, nsrcs))
         ha_array = np.zeros((nsrcs, nfits))
         azalt_array = np.zeros((2, nsrcs, nfits))
         data_array = np.zeros((2, nsrcs, nfits))
         err_array = np.zeros((2, nsrcs, nfits))
         for i, ra in enumerate(ras):
-            pos_array = np.append(pos_array, (ra, decs[i]))
+            pos_array[0, i] = ra; pos_array[1, i] = decs[i]
             key = (round(ra, 2), round(decs[i], 2))
             if not key in srcdict: srcdict[key] = {}
             for j in xrange(nfits):
@@ -210,9 +210,9 @@ class catData(object):
                 azalt_array[0, i, j] = az
                 azalt_array[1, i, j] = alt
             # saving to dictionary
-            srcdict[key]['data'] = data_array
-            srcdict[key]['error'] = err_array
-            srcdict[key]['ha'] = ha_array
+            srcdict[key]['data'] = data_array[:, i, :]
+            srcdict[key]['error'] = err_array[:, i, :]
+            srcdict[key]['ha'] = ha_array[i, :]
         # saving attributes to object
         self.data_array = data_array
         self.err_array = err_array
@@ -254,6 +254,7 @@ class catData(object):
             mgp['ha_array'] = self.ha_array
             mgp['err_array'] = self.err_array
             mgp['pos_array'] = self.pos_array
+            mgp['azalt_array'] = self.azalt_array
             # write data to file
             dgp = f.create_group('Data')
             dgp.create_dataset('data_array', chunks=True, data=self.data_array)
@@ -277,13 +278,14 @@ class catData(object):
             self.ha_array = mgp['ha_array'].value
             self.err_array = mgp['err_array'].value
             self.pos_array = mgp['pos_array'].value
+            self.azalt_array = mgp['azalt_array'].value
             # read data
             dgp = f['Data']
             self.data_array = dgp['data_array'].value
 
-    def calc_corrflux(self, beam, pol):
+    def calc_catalog_flux(self, beam, pol):
         """
-        Calculates corrected flux values for all positions (ra, dec) using the measurements at different az-alt
+        Calculates corrected/ catalog flux values for all positions (ra, dec) using the measurements at different az-alt
         coordinates:
                     I = \sum I^obs(t, nu) * B(t, nu) / B(t, nu)
 
@@ -301,13 +303,13 @@ class catData(object):
  
         azs = self.azalt_array[0, :, :]
         alts = self.azalt_array[1, :, :]
-        corr_array = np.ndarray((self.Nsrcs))
-        beam_array = np.ndarray((self.Nfits))
+        flux_array = np.ndarray((self.Nsrcs), dtype=float)
+        beam_array = np.ndarray((self.Nfits), dtype=float)
         for i in range(self.Nsrcs):
             for j in range(self.Nfits):
                 beam_array[j] = healpy.get_interp_val(beam, np.pi/2 - (alts[i, j] * np.pi/180.), azs[i, j] * np.pi/180.) 
             if self.data_array.shape[0] == 1:
-                corr_array[i] = np.nansum(self.data_array[0, i, :] * beam_array) / np.nansum(beam_array ** 2)
+                flux_array[i] = np.nansum(self.data_array[0, i, :] * beam_array) / np.nansum(beam_array ** 2)
             else:
-                corr_array[i] = np.nansum(self.data_array[pol2ind[pol], i, :] * beam_array) / np.nansum(beam_array ** 2)
-        return corr_array
+                flux_array[i] = np.nansum(self.data_array[pol2ind[pol], i, :] * beam_array) / np.nansum(beam_array ** 2)
+        return flux_array

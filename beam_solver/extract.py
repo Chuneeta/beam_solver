@@ -41,11 +41,10 @@ def get_centre_radec(fitsfile):
     """
     
     fitsinfo = get_fitsinfo(fitsfile)
-    w = wcs.WCS(fitsinfo['header'])
-    nxaxis = fitsinfo['nxaxis']
-    nyaxis = fitsinfo['nyaxis']
-    cxpix, cypix = int(nxaxis/2.), int(nyaxis/2.)
-    cra, cdec = w.all_pix2world(cxpix, cypix, 0, 0, 0)[:2]    
+    hdr = fitsinfo['header']
+    w = wcs.WCS(hdr)
+    cxpix, cypix = int(hdr['CRPIX1']), int(hdr['CRPIX2'])
+    cra, cdec = w.all_pix2world(cxpix, cypix, 0, 0, 0)[:2]
 
     return cra, cdec
 

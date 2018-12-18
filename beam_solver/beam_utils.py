@@ -1,6 +1,6 @@
 import numpy as np
+import healpy as hp
 from pyuvdata import UVBeam
-import healpy
 
 pol2ind = {'xx': 0, 'yy': 1}
 
@@ -29,7 +29,7 @@ def get_gaussbeam(mu, sigma, size=31):
 
     return beam_array
 
-def get_fitsbeam(filename, freq, pol='xx'):
+def get_fitsbeam(filename, freq, pol='xx', nside=32):
     """
     Generate thes beam values from the beamfits for any given
     frequency using linear interpolation.
@@ -44,7 +44,10 @@ def get_fitsbeam(filename, freq, pol='xx'):
         Frequency in Hz at which the beam values needs to be interpolated.
 
     pol : list of str
-            Polarization, can be xx, yy. Default is xx.
+        Polarization, can be xx, yy. Default is xx.
+
+    nside : int
+        Nside or resolution of the output healpy map.
     """
 
     # reading beamfits
@@ -56,6 +59,7 @@ def get_fitsbeam(filename, freq, pol='xx'):
     beamfreq = uvb.freq_array[0]
     beamdata = data_array[0, 0, pol2ind[pol], :, :]
     beam_array = _interp_freq(beamdata, beamfreq, freq)
+    beam_array = hp.ud_grade(beam_array, nside)	
 
     return beam_array
 
@@ -91,13 +95,14 @@ def get_cstbeam(filename, beamfreq, freq, pol='xx', nside=64):
                           feed_version='0.1', feed_pol=pol,
                           model_name='E-field pattern - Rigging height 4.9m',
                           model_version='1.0')
-    uvb.peak_normalize()
     uvb.interpolation_function = 'az_za_simple'
     uvb.to_healpix(nside)
     uvb.peak_normalize()
     data_array = uvb.data_array
     beamdata = data_array[0, 0, pol2ind[pol], :, :]
     beam_array = _interp_freq(beamdata, beamfreq, freq)
+    
+    return beam_array
 
 def _interp_freq(data, beamfreq, freq):
     """
