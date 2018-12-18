@@ -1,0 +1,6 @@
+*.pyc
+/build/
+*.h5
+*.swp
+*.swo
+*.DS_Store
