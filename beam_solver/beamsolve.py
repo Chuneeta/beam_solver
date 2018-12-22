@@ -10,6 +10,7 @@ class BeamFunc():
         self.bm_pix = bm_pix
         self.eqs = OrderedDict()
         self.consts = OrderedDict()
+        self.sol_dict = OrderedDict()
         self.ls = None
 
     def _mk_key(self, pixel, srcid, timeid):
@@ -34,6 +35,18 @@ class BeamFunc():
         """
 
         return 'w%d_s%d_t%d' % (pixel, srcid, timeid)
+
+    def _mk_eq(self, ps, ws, catalog_flux, i, j, **kwargs):
+        obs_vals = self.cat.data_array[0]
+        c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0,j], ps[p][1,j])), i, j): ws[p][j]
+                    for p in xrange(4)}
+        eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
+            + '*b%d'%(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))  for p in xrange(4)])
+        self.eqs[eq] = I_s / catalog_flux[i]
+        self.consts.update(c)
+
+    def build_solver(self, **kwargs)
+        self.ls = linsolve.LinearSolver(self.eqs, **self.consts)
 
     def unravel_pix(self, ndim, coord):
         """
@@ -184,7 +197,7 @@ class BeamOnly(BeamFunc):
     def __init__(self, cat=None, bm_pix=60):
         BeamFunc.__init__(self, cat, bm_pix)
 	
-    def construct_linear_sys(self, catalog_flux=[], theta=[0], flip=[1]):
+    def construct_linear_sys(self, catalog_flux=[], theta=[0], flip=[1], polnum=0, **kwargs):
         """
         Construct a linear system of equations of the form
 
@@ -207,7 +220,7 @@ class BeamOnly(BeamFunc):
         nfits = self.cat.Nfits
         nsrcs = self.cat.Nsrcs
 
-        obs_vals = self.cat.data_array[0]
+        obs_vals = self.cat.data_array[polnum]
 
         for i in xrange(nsrcs):
             for th in theta:
@@ -216,13 +229,9 @@ class BeamOnly(BeamFunc):
                     for j in xrange(nfits):
                         I_s = obs_vals[i, j]
                         if np.isnan(I_s): continue
-                        c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j): ws[p][j] for p in xrange(4)}
-                        eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
-                            + '*b%d'%(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))  for p in xrange(4)])
-                        self.eqs[eq] = I_s / catalog_flux[i]
-                        self.consts.update(c)
+                        self._mk_eq(ps, ws, catalog_flux, i, j, **kwargs)
 
-        self.ls = linsolve.LinearSolver(self.eqs, **self.consts)
+        self.build_solver(**kwargs)
 
     def eval_sol(self, sol):
         """
@@ -235,8 +244,9 @@ class BeamOnly(BeamFunc):
 
         obs_beam = np.zeros((self.bm_pix**2), dtype=float)
         for key in sol.keys():
-            px = int(key.strip('b'))
-            obs_beam[px] = sol.get(key)
+            if key[0] == 'b':
+                px = int(key.strip('b'))
+                obs_beam[px] = sol.get(key)
 
         obs_beam.shape = (self.bm_pix, self.bm_pix)
         return obs_beam
@@ -245,66 +255,28 @@ class BeamCat(BeamFunc):
     def __init__(self, cat, bm_pix):
         BeamFunc.__init__(self, cat, bm_pix)
 
-    def construct_nonlinear_sys(self, catalog_flux, bvals, theta=[0], flip=[1], constrain=False):
-        """
-        Construct a non linear system of equations of the form
-
-            I_mod * A  = I_obs.
-
-        where I_mod is model flux value, A is primary beam value and I_obs is our measurement.
-        We decompose A such that
-
-            A = a1 * w1 + a2 * w2 + a3 * w3 + a4 * w4
-
-        where (a1, a2, a3, a4) are the four closest pixel values of the beam to the azimuth-altitude
-        value of the source at a given time and (w1, w2, w3, w4) are the corrsponding weights.
-
-        In the non-linear case, we solve for both I_mod and A, however initial guesses are required
-        to start the iteration.
-
-        Parameters
-        ----------
-        mflux : list or np.ndarray
-            List or array containing the model flux values to be used as initial guesses for I_mod.
-            Default is list of ones.
-
-        bvals : 2D numpy array
-            Array containing initial guesses for the beam. Default is zeros.
-
-        constrain : boolean
-            If True, constrained the center pixel to be one. It will error out if the sources are not
-            transiting zenith. Default is False.
-        """
-    
-        nfits = self.cat.Nfits
-        nsrcs = self.cat.Nsrcs
-
+    def _mk_eq(self, ps, ws, catalog_flux, i, j, **kwargs):
+        bvals = kwargs['bvals'].flatten()
+        self.sol_dict['I%d'%i] = catalog_flux[i]
         obs_vals = self.cat.data_array[0]
-        bvals_f = bvals.flatten()
-        sol_dict = OrderedDict()
+        c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0,j], ps[p][1,j])), i, j): ws[p][j]
+                    for p in xrange(4)}
+        eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
+            + '*b%d'% (self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))) + '*I%d'%i for p in xrange(4)])
+        self.eqs[eq] = I_s
+        self.consts.update(c)
+        for p in xrange(4):
+            bpix = self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))
+            self.sol_dict['b%d'%bpix] = bvals_f[bpix]
 
-        for i in xrange(nsrcs):
-            sol_dict['I%d'%i] = catalog_flux[i]
-            for th in theta:
-                for fl in flip:
-                    ps, ws = self.get_weights(self.cat.azalt_array[:, i, :], th, fl)
-                    for j in xrange(nfits):
-                        I_s = obs_vals[i, j]
-                        if np.isnan(I_s): continue
-                        c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j): ws[p][j] for p in xrange(4)}
-                        eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
-                            + '*b%d'% (self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))) + '*I%d'%i for p in xrange(4)])
-                        self.eqs[eq] = I_s
-                        self.consts.update(c)
-                        for p in xrange(4):
-                            bpix = self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))
-                            sol_dict['b%d'%bpix] = bvals_f[bpix]
+    def build_solver(self, **kwargs):
+        constrain = kwargs.pop('constrain', False)
         # constraining the center pixel to be one
         if constrain:
             self.eqs['100*b%d'%(self.unravel_pix(self.bm_pix, (int(self.bm_pix/2.), int(self.bm_pix/2.))))] = 100.0
         self.ls = linsolve.LinProductSolver(self.eqs, sol0=sol_dict, **self.consts)
-
-    def eval_nonlinear_sol(self, sol):
+        
+    def eval_sol(self, sol):
         """
         Evalutes the solutions to output the beam values into a
         2D grid and the model flux values.
@@ -313,19 +285,14 @@ class BeamCat(BeamFunc):
             Dictionary containing the solutions, returned by the solver.
         """
 
-        obs_beam = np.zeros((self.bm_pix**2), dtype=float)
+        obs_beam = BeamOnly.eval_sol(self, sol)
         fluxvals = np.zeros((2, self.cat.Nsrcs))
         k = 0
         for key in sol[1].keys():
-            if key[0] == 'b':
-                px = int(key.strip('b'))
-                obs_beam[px] = sol[1].get(key)
             if key[0] == 'I':
                 fluxvals[0, k] = key[1::]
                 fluxvals[1, k] = sol[1].get(key)
                 k += 1
-
-        obs_beam.shape = (self.bm_pix, self.bm_pix)
         return fluxvals, obs_beam
 
 class BeamOnlyCross(BeamOnly):
@@ -352,37 +319,8 @@ class BeamOnlyCross(BeamOnly):
             List or array containing the model/catalog flux values to be used as I_mod.
         """
 
-        nfits = self.cat.Nfits
-        nsrcs = self.cat.Nsrcs
-
-        obsvals_xx = self.cat.data_array[0]
-        obsvals_yy = self.cat.data_array[1]
-
-        for i in xrange(nsrcs):
-            for th in theta_xx:
-                for fl in flip_xx:
-                    ps, ws = self.get_weights(self.cat.azalt_array[:, i, :], th, fl)
-                    for j in xrange(nfits):
-                        I_s = obsvals_xx[i, j]
-                        if np.isnan(I_s): continue
-                        c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j): ws[p][j] for p in xrange(4)}
-                        eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
-                            + '*b%d'%(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))  for p in xrange(4)])
-                        self.eqs[eq] = I_s / catalog_flux_xx[i]
-                        self.consts.update(c)
-
-            for th in theta_yy:
-                for fl in flip_yy:
-                    ps, ws = ps, ws = self.get_weights(self.cat.azalt_array[:, i, :], th, fl)
-                    for j in xrange(nfits):
-                        I_s = obsvals_yy[i, j]
-                        if np.isnan(I_s): continue
-                        c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j): ws[p][j] for p in xrange(4)}
-                        eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
-                            + '*b%d'%(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))  for p in xrange(4)])
-                        self.eqs[eq] = I_s / catalog_flux_yy[i]
-                        self.consts.update(c)
-        self.ls = linsolve.LinearSolver(self.eqs, **self.consts)
+        BeamOnly.construct_linear_sys(self, catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx)
+        BeamOnly.construct_linear_sys(self, catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy)
 
 class BeamCatCross(BeamCat):
     def __init__(self, cat=None, bm_pix=60):
@@ -419,68 +357,6 @@ class BeamCatCross(BeamCat):
             transiting zenith. Default is False.
         """
 
-        nfits = self.cat.Nfits
-        nsrcs = self.cat.Nsrcs
-
-        measured_flux_xx = self.cat.data_array[0]
-        measured_flux_yy = self.cat.data_array[1]
-        beamvals_f = beamvals.flatten()
-        sol_dict = OrderedDict()
-
-        for i in xrange(nsrcs):
-            sol_dict['I%d'%i] = 0.5 * (catalog_flux_xx[i] + catalog_flux_yy[i])
-            for th in theta_xx:
-                for fl in flip_xx:
-                    ps, ws = self.get_weights(self.cat.azalt_array[:, i, :], th, fl)
-                    for j in xrange(nfits):
-                        I_s = measured_flux_xx[i, j]
-                        if np.isnan(I_s): continue
-                        c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j): ws[p][j] for p in xrange(4)}
-                        eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
-                            + '*b%d'% (self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))) + '*I%d'%i for p in xrange(4)])
-                        self.eqs[eq] = I_s
-                        self.consts.update(c)
-                        for p in xrange(4):
-                            bpix = int(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))
-                            sol_dict['b%d'%bpix] = beamvals_f[bpix]
-
-            for th in theta_yy:
-                for fl in flip_yy:
-                    ps, ws = self.get_weights(self.cat.azalt_array[:, i, :], th, fl)
-                    for j in xrange(nfits):
-                        I_s = measured_flux_yy[i, j]
-                        if np.isnan(I_s): continue
-                        c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j): ws[p][j] for p in xrange(4)}
-                        eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
-                            + '*b%d'% (self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))) + '*I%d'%i for p in xrange(4)])
-                        self.eqs[eq] = I_s
-                        self.consts.update(c)
-                        for p in xrange(4):
-                            bpix = int(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))
-                            sol_dict['b%d'%bpix] = beamvals_f[bpix]
-        # constraining the center pixel to be one
-        if constrain:
-            self.eqs['100*b%d'%(self.unravel_pix(self.bm_pix, (int(self.bm_pix/2.), int(self.bm_pix/2.))))] = 100.0
-        self.ls = linsolve.LinProductSolver(self.eqs, sol0=sol_dict, **self.consts)
+        BeamCat.construct_linear_sys(self, catalog_flux=catalog_flux_xx, beamvals=beamvals, theta=theta_xx, flip=flip_xx)
+        BeamCat.construct_linear_sys(self, catalog_flux=catalog_flux_yy, beamvals=beamvals, theta=theta_yy, flip=flip_yy)
         
-class BeamSolveBase(BeamOnly, BeamCat):
-    def __init__(self, cat=None, bm_pix=60):
-        BeamOnly.__init__(self, cat, bm_pix)
-        BeamCat.__init__(self, cat, bm_pix)
-
-class BeamSolveCross(BeamOnlyCross, BeamCatCross):
-    def __init__(self, cat=None, bm_pix=60):
-        BeamOnlyCross.__init__(self, cat, bm_pix)
-        BeamCatCross.__init__(self, cat, bm_pix)
-
-class BeamSolve(BeamSolveBase, BeamSolveCross):
-    def __init__(self, cat=None, bm_pix=60, cross=True):
-        BeamSolveBase.__init__(self, cat, bm_pix)
-        BeamSolveCross.__init__(self, cat, bm_pix)
-
-    def beamsolver(self, cross=False):
-        if cross:
-            return BeamSolveCross(self.cat, self.bm_pix)
-        else:
-            return BeamSolveBase(self.cat, self.bm_pix)
-
