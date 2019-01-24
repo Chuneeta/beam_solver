@@ -68,11 +68,15 @@ h
         i = srcid; j = timeid
         c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0,j], ps[p][1,j])), i, j): ws[p][j] for p in xrange(4)}
         eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
-            + '*b%d'%(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))  for p in xrange(4)])
+            + '*b%d'%(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))  for p in xrange(4))
+        assert eq not in eqs, 'equation already exists.'
         self.eqs[eq] = obs_flux / catalog_flux
         self.consts.update(c)
 
-    def build_solver(self, **kwargs):
+    def calc_catalog_flux(self, beam_model, pol):
+       return self.cat.calc_catalog_flux(beam_model, pol)        
+
+    def _build_solver(self, **kwargs):
         """
         Builds linsolve solver
         """
@@ -201,7 +205,7 @@ h
 
         return U, S, V
 
-    def remove_degen(self, ls, obsbeam, threshold=5e-4):
+    def remove_degen(self, ls, obsbeam, threshold=5e-6):
         """
         Remove degeneracies using single value decomposition. It removes all eigenvalue modes
         above the specified threshold.
@@ -220,7 +224,7 @@ h
 
         # determining the cutoff threshold for bad eigen modes
         total = sum(S)
-        var_exp = np.array([(i / total) * 100 for i in sorted(S, reverse=True)])
+        var_exp = np.array([(i / total) for i in sorted(S, reverse=True)])
         # selecting the cutoff eigen-mode
         cutoff_mode = np.where(var_exp < threshold)[0][0]
         print ('Removing all eigen modes above {}'.format(cutoff_mode))
@@ -240,7 +244,7 @@ class BeamOnly(BeamFunc):
         """
         BeamFunc.__init__(self, cat, bm_pix)
 	
-    def construct_sys(self, catalog_flux=[], theta=[0], flip=[1], polnum=0, **kwargs):
+    def add_eqs(self, catalog_flux, theta=[0], flip=[1], polnum=0, **kwargs):
         """
         Construct a linear system of equations of the form
 
@@ -278,7 +282,7 @@ class BeamOnly(BeamFunc):
         """
         Solves for the linear system of equations
         """
-        self.build_solver(**kwargs)
+        self._build_solver(**kwargs)
         sol = self.ls.solve(verbose=True)
         return sol        
 
@@ -341,13 +345,14 @@ class BeamCat(BeamOnly):
                     for p in xrange(4)}
         eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
             + '*b%d'% (self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))) + '*I%d'%i for p in xrange(4)])
+        assert eq not in eqs, 'equation already exists.'
         self.eqs[eq] = obs_flux
         self.consts.update(c)
         for p in xrange(4):
             bpix = int(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))
             self.sol_dict['b%d'%bpix] = bvals[bpix]
 
-    def construct_sys(self, catalog_flux=[], theta=[0], flip=[1], polnum=0, **kwargs):
+    def add_eqs(self, catalog_flux, theta=[0], flip=[1], polnum=0, **kwargs):
         """
         Construct a non linear system of equations of the form
 
@@ -383,23 +388,23 @@ class BeamCat(BeamOnly):
                         if np.isnan(I_s): continue
                         self._mk_eq(ps, ws, I_s, catalog_flux[i], i, j, **kwargs)
 
-    def build_solver(self, multiply=100, **kwargs):
+    def _build_solver(self, norm_weight=100, **kwargs):
         """
         Builds linsolve solver
 
 		Parameters
 		----------
-		multiply: float
+		norm_weight: float
 			Value specified to force the desired constrained. Default is 100.
         """
         constrain = kwargs.pop('constrain', False)
         # constraining the center pixel to be one
         if constrain:	
-            self.eqs['%d*b%d'%(multiply, self.unravel_pix(self.bm_pix, (int(self.bm_pix/2.), int(self.bm_pix/2.))))] = multiply
+            self.eqs['%d*b%d'%(norm_weight, self.unravel_pix(self.bm_pix, (int(self.bm_pix/2.), int(self.bm_pix/2.))))] = norm_weight
         self.ls = linsolve.LinProductSolver(self.eqs, sol0=self.sol_dict, **self.consts)
 
     def solve(self, maxiter=50, conv_crit=1e-11, **kwargs):
-        self.build_solver(**kwargs)
+        self._build_solver(**kwargs)
         sol = self.ls.solve_iteratively(maxiter=maxiter, conv_crit=conv_crit, verbose=True)
         return sol
 
@@ -413,7 +418,7 @@ class BeamCat(BeamOnly):
         """
 
         obs_beam = BeamOnly(cat=self.cat, bm_pix=self.bm_pix).eval_sol(sol[1])
-	fluxvals = np.zeros((2, self.cat.Nsrcs))
+	    fluxvals = np.zeros((2, self.cat.Nsrcs))
         k = 0
         for key in sol[1].keys():
             if key[0] == 'I':
@@ -430,7 +435,7 @@ class BeamOnlyCross(BeamOnly):
         """
         BeamOnly.__init__(self, cat, bm_pix)
         
-    def construct_sys(self, catalog_flux_xx=[], catalog_flux_yy=[], theta_xx=[0], theta_yy=[np.pi/2], flip_xx=[1], flip_yy=[1], **kwargs):
+    def add_eqs(self, catalog_flux_xx, catalog_flux_yy, theta_xx=[0], theta_yy=[np.pi/2], flip_xx=[1], flip_yy=[1], **kwargs):
         """
         Construct a linear system of equations of the form
 
@@ -449,14 +454,14 @@ class BeamOnlyCross(BeamOnly):
         catalog_flux : list or np.ndarray
             List or array containing the model/catalog flux values to be used as I_mod.
         """
-        BeamOnly.construct_sys(self, catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx, polnum=0)
-	BeamOnly.construct_sys(self, catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, polnum=1)
+        BeamOnly.add_eqs(self, catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx, polnum=0)
+	BeamOnly.add_eqs(self, catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, polnum=1)
 
     def solve(self, **kwargs):
         """
         Solves for the linear system of equations
         """
-        self.build_solver(**kwargs)
+        self._build_solver(**kwargs)
         sol = self.ls.solve(verbose=True)
         return sol
         
@@ -469,7 +474,7 @@ class BeamCatCross(BeamCat):
         """
         BeamCat.__init__(self, cat, bm_pix)
 
-    def construct_sys(self, catalog_flux_xx, catalog_flux_yy, theta_xx=[0], theta_yy=[np.pi/2], flip_xx=[1], flip_yy=[1], polnum=0, **kwargs):
+    def add_eqs(self, catalog_flux_xx, catalog_flux_yy, theta_xx=[0], theta_yy=[np.pi/2], flip_xx=[1], flip_yy=[1], polnum=0, **kwargs):
         """
         Construct a non linear system of equations of the form
 
@@ -499,10 +504,10 @@ class BeamCatCross(BeamCat):
             If True, constrained the center pixel to be one. It will error out if the sources are not
             transiting zenith. Default is False.
         """
-        BeamCat.construct_sys(self, catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx, polnum=0, **kwargs)
-        BeamCat.construct_sys(self, catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, polnum=1, **kwargs)
+        BeamCat.add_eqs(self, catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx, polnum=0, **kwargs)
+        BeamCat.add_eqs(self, catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, polnum=1, **kwargs)
 
     def solve(self, maxiter=50, conv_crit=1e-11, **kwargs):
-        self.build_solver(**kwargs)
+        self._build_solver(**kwargs)
         sol = self.ls.solve_iteratively(maxiter=maxiter, conv_crit=conv_crit, verbose=True)
         return sol
