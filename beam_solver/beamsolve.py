@@ -449,11 +449,8 @@ class BeamOnlyCross(BeamOnly):
         catalog_flux : list or np.ndarray
             List or array containing the model/catalog flux values to be used as I_mod.
         """
-        self.bmo = BeamOnly(cat=self.cat, bm_pix=self.bm_pix)
-        self.bmo.construct_sys(catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx, polnum=0)
-        self.bmo.construct_sys(catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, polnum=1)
-        self.consts = self.bmo.consts
-        self.eqs = self.bmo.eqs
+        BeamOnly.construct_sys(self, catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx, polnum=0)
+	BeamOnly.construct_sys(self, catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, polnum=1)
 
     def solve(self, **kwargs):
         """
@@ -502,12 +499,8 @@ class BeamCatCross(BeamCat):
             If True, constrained the center pixel to be one. It will error out if the sources are not
             transiting zenith. Default is False.
         """
-        self.bmc = BeamCat(cat=self.cat, bm_pix=self.bm_pix)
-        self.bmc.construct_sys(catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx, polnum=0, **kwargs)
-        self.bmc.construct_sys(catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, polnum=1, **kwargs)
-        self.consts = self.bmc.consts
-        self.eqs = self.bmc.eqs
-        self.sol_dict = self.bmc.sol_dict
+        BeamCat.construct_sys(self, catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx, polnum=0, **kwargs)
+        BeamCat.construct_sys(self, catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, polnum=1, **kwargs)
 
     def solve(self, maxiter=50, conv_crit=1e-11, **kwargs):
         self.build_solver(**kwargs)
