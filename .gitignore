@@ -5,5 +5,5 @@
 *.swo
 *.DS_Store
 /beam_solver/*.DS_Store
-/beam_solver.egg-info
+beam_solver.egg-info
 
