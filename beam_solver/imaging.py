@@ -1,24 +1,29 @@
 import casa_utils as ct
 import pyuvdata
 from astropy.time import Time
+import os
 
-class Imaging(object):
-    def __init__(self, dset=None):
+class UVConvert(object):
+    def __init__(self, dset, outfile=None):
         """
-        Object to store measurement sets of Miriad files containing visibilities and perform operations
-        such as generating images.
+        Object to store measurement sets of Miriad files containing visibilities in order to
+        convert them to measurements.
     
         Parameters
         ----------
         dset : str 
-            MS or Miriad file containing visibilities are required metadata.
+            Miriad file containing visibilities are required metadata.
         """
         
         self.dset = dset
+        if outfile is None: 
+            self.outfile = '{}.ms'.format(outfile)
+        else:
+            self.outfile = outfile 
 
-    def convert_mset(self, phs=None, del_uvfits=False):
+    def convert_mset(self, phs=None, del_uvfits=False, clobber=True):
         """
-        Converts Miriad file to Measurement set
+        Converts Miriad file to Measurement set (MS)
         
         Parameters
         ----------
@@ -44,10 +49,26 @@ class Imaging(object):
         uvd.write_uvfits(uvfits, spoof_nonessential=True)
         
         # converting to mset
-        self.dset = self.dset + '.ms'
-        ct.uvfits2ms(uvfits, outfile=self.dset, delete=True)
+        if clobber:
+            if os.path.exists(self.outfile):
+                os.system('rm -rf {}'.format(self.outfile))
+        ct.uvfits2ms(uvfits, outfile=self.outfile, delete=True)
  
-    def imaging(self, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weigthing='uniform', start=200, stop=900, uvlength=0):
+class Imaging(object):
+    def __init__(self, ms):
+        """
+        Object to store measurement sets of meausrement files containing visibilities and performs
+        operations such as imaging.
+
+        Parameters
+        ----------
+        ms : str
+            Measurement set file containing visibilities are required metadata.
+        """
+
+        self.ms = ms
+	
+    def generate_images(self, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0):
         """
         Generates multi-frequency synthesized images using all baselines within the specified cutoff threshold
     
@@ -92,8 +113,7 @@ class Imaging(object):
             Uv length in metres equal to or smaller to exclude while generating the image. Default is 0.
         """
 
-        ct.imaging(self.ms, imagename, antenna=antenna, cellsize=cellsize, npix=npix, niter=niter, threshold=threshold, weighting=weighting, start=start, stop=stop, uvlength=uvlength)
-        ct.exportfits(imagename)
-        ct.remove_image(imagename)       
-
-           
+        ct.imaging(self.ms, imagename, antenna=antenna, cellsize=cellsize, npix=npix, niter=niter, threshold=threshold, weighting=weighting, start=start, stop=stop, uvlength=uvlength, delete=False)
+        #ct.exportfits(imagename)
+        #ct.remove_image(imagename)       
+       
