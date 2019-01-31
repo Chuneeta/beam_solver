@@ -145,7 +145,7 @@ def imaging(dset, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, 
     casawrapper.call_casa_task(task='clean', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)    
 
 
-def exportfits(imagename, fitsname=None, script='exportfits', delete=True):
+def exportfits(imagename, fitsname=None, overwrite=False, script='exportfits', delete=True):
     """
     Converts CASA images to FITS files
 
@@ -157,6 +157,10 @@ def exportfits(imagename, fitsname=None, script='exportfits', delete=True):
     fitsname: string
         Name of output fits file. Default is <imagename>.fits
 
+    overwrite : boolean
+        If True, overwrites the existing image with the new one.
+        Default is False.
+        
     script: string 
         Name of casapy script that will be create on-the-fly. Default is exportfits
 
@@ -166,7 +170,7 @@ def exportfits(imagename, fitsname=None, script='exportfits', delete=True):
     if fitsname is None:
         fitsname = imagename.replace('.image', '.fits')
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
-    task_opt = casawrapper.create_casa_options(imagename="'{}'".format(imagename), fitsimage="'{}'".format(fitsname), overwrite=True)
+    task_opt = casawrapper.create_casa_options(imagename="'{}'".format(imagename), fitsimage="'{}'".format(fitsname), overwrite=overwrite)
     casawrapper.call_casa_task(task='exportfits', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
 
 def remove_image(imagename):

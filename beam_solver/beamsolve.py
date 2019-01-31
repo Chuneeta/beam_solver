@@ -68,8 +68,8 @@ h
         i = srcid; j = timeid
         c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0,j], ps[p][1,j])), i, j): ws[p][j] for p in xrange(4)}
         eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
-            + '*b%d'%(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))  for p in xrange(4))
-        assert eq not in eqs, 'equation already exists.'
+            + '*b%d'%(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))  for p in xrange(4)])
+        assert eq not in self.eqs, 'equation already exists.'
         self.eqs[eq] = obs_flux / catalog_flux
         self.consts.update(c)
 
@@ -345,7 +345,7 @@ class BeamCat(BeamOnly):
                     for p in xrange(4)}
         eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
             + '*b%d'% (self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))) + '*I%d'%i for p in xrange(4)])
-        assert eq not in eqs, 'equation already exists.'
+        assert eq not in self.eqs, 'equation already exists.'
         self.eqs[eq] = obs_flux
         self.consts.update(c)
         for p in xrange(4):
@@ -418,7 +418,7 @@ class BeamCat(BeamOnly):
         """
 
         obs_beam = BeamOnly(cat=self.cat, bm_pix=self.bm_pix).eval_sol(sol[1])
-	    fluxvals = np.zeros((2, self.cat.Nsrcs))
+        fluxvals = np.zeros((2, self.cat.Nsrcs))
         k = 0
         for key in sol[1].keys():
             if key[0] == 'I':
@@ -455,7 +455,7 @@ class BeamOnlyCross(BeamOnly):
             List or array containing the model/catalog flux values to be used as I_mod.
         """
         BeamOnly.add_eqs(self, catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx, polnum=0)
-	BeamOnly.add_eqs(self, catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, polnum=1)
+        BeamOnly.add_eqs(self, catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, polnum=1)
 
     def solve(self, **kwargs):
         """
