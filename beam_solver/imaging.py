@@ -1,61 +1,12 @@
 import casa_utils as ct
-import pyuvdata
-from astropy.time import Time
+from astropy.io import fits
+from astropy import wcs
+import numpy as np
+import pylab
 import os
 
-class UVConvert(object):
-    def __init__(self, dset, outfile=None):
-        """
-        Object to store measurement sets of Miriad files containing visibilities in order to
-        convert them to measurements.
-    
-        Parameters
-        ----------
-        dset : str 
-            Miriad file containing visibilities are required metadata.
-        """
-        
-        self.dset = dset
-        if outfile is None: 
-            self.outfile = '{}.ms'.format(outfile)
-        else:
-            self.outfile = outfile 
-
-    def convert_mset(self, phs=None, del_uvfits=False, clobber=True):
-        """
-        Converts Miriad file to Measurement set (MS)
-        
-        Parameters
-        ----------
-        phs : float, optional
-            Julian date at which to phase the visibilities. By default the visibilities are phased to first timestamp of the file
-
-        del_uvfits : boolean, optional
-            If True, deleted the uvfits file that is created during the conversion from uvfile to ms.
-            Default is False.
-        """
-
-        uvd = pyuvdata.UVData()
-        uvd.read_miriad(self.dset)
-        times = uvd.time_array
-        phs_time = times[0] if phs is None else phs
-
-        print ('Phasing visibilities to {}'.format(phs_time))
-        uvd.phase_to_time(Time(phs_time, format='jd', scale='utc'))
-
-        # converting to uvfits
-        uvfits = self.dset + '.uvfits'
-        print ('Converting {} to {}'.format(self.dset, uvfits))
-        uvd.write_uvfits(uvfits, spoof_nonessential=True)
-        
-        # converting to mset
-        if clobber:
-            if os.path.exists(self.outfile):
-                os.system('rm -rf {}'.format(self.outfile))
-        ct.uvfits2ms(uvfits, outfile=self.outfile, delete=True)
- 
 class Imaging(object):
-    def __init__(self, ms):
+    def __init__(self, ms, imagename):
         """
         Object to store measurement sets of meausrement files containing visibilities and performs
         operations such as imaging.
@@ -63,20 +14,21 @@ class Imaging(object):
         Parameters
         ----------
         ms : str
-            Measurement set file containing visibilities are required metadata.
+            Input Measurement set file containing visibilities are required metadata.
+        
+        imagename : str
+            Name of output casa image.
         """
 
         self.ms = ms
-	
-    def generate_images(self, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0):
+        self.imagename = imagename
+
+    def generate_image(self, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0, del_script=True):
         """
         Generates multi-frequency synthesized images using all baselines within the specified cutoff threshold
-    
+
         Parameters
         ---------
-        imagename: string
-            Name of output casa image
-
         antenna: string
             Antenna(s) or baseline(s) to used for imaging.
             e.g antenna='0' uses data from antenna 0 only
@@ -102,7 +54,6 @@ class Imaging(object):
 
         weighting: string
             Weighting to be using for gridding of uv points. Default is uniform.
-
         start: int
             Starting frequency channel. Default is 200.
 
@@ -111,9 +62,99 @@ class Imaging(object):
 
         uvlength: float
             Uv length in metres equal to or smaller to exclude while generating the image. Default is 0.
+        
+        del_script : boolean
+            If True, deletes the casa script used to execute the CASA clean task.
+            Default is True.
         """
 
-        ct.imaging(self.ms, imagename, antenna=antenna, cellsize=cellsize, npix=npix, niter=niter, threshold=threshold, weighting=weighting, start=start, stop=stop, uvlength=uvlength, delete=False)
-        #ct.exportfits(imagename)
-        #ct.remove_image(imagename)       
-       
+        ct.imaging(self.ms, self.imagename, antenna=antenna, cellsize=cellsize, npix=npix, niter=niter, threshold=threshold, weighting=weighting, start=start, stop=stop, uvlength=uvlength, delete=del_script)
+            
+    def remove_image(self, all=False):
+        """
+        Removes unecesssary images spit by CASA
+
+        Parameters
+        ----------
+        all : boolean
+            If True, removes the casa image file as well.
+            Default is False.
+        """
+        os.system('rm -r {}.model'.format(self.imagename))
+        os.system('rm -r {}.flux'.format(self.imagename))
+        os.system('rm -r {}.psf'.format(self.imagename))
+        os.system('rm -r {}.residual'.format(self.imagename))
+        if all:
+            os.system('rm -r {}.image'.format(self.imagename))
+
+    def to_fits(self, fitsname, overwrite=False):
+        """
+        Convert CASA image file to FITS format
+    
+        Parameters
+        ----------
+        fitsname : str
+            Name of output fitsfile
+
+        overwrite : boolean
+            If True, overwrites the existing image with the new one.
+            Default is False.
+        """
+        input_image = self.imagename + '.image'
+        ct.exportfits(input_image, fitsname=fitsname)
+
+    def read_fits(self, fitsfile):
+        """
+        Read fits file and returns data and header info
+        
+        Parameters
+        ----------
+        fitsfile : str
+            Name of input fitsfile to read
+        """
+        data, header = fits.getdata(fitsfile, header=True)
+        data = data.squeeze()
+        return data, header
+
+    def plot_image(self, fitsfile, cmap='gray', vmin=None, vmax=None):
+        """
+        Read in and plot the fisfile into a 2D waterfall plot.
+
+        Parameters
+        ----------
+        fitsfile : str
+            Name of input fitsfile to read.
+
+        cmap : str
+            Color map of the 2D plot. Default is gray.
+
+        vmin : float
+            Minimum colorbar value for the plot. Default is
+            minimum of the data.
+
+        vmax : float
+            Minimum colorbar value for the plot. Default is
+            maximum of the data.
+        """
+        data, header = self.read_fits(fitsfile)
+        my_wcs = wcs.WCS(header, naxis=[wcs.WCSSUB_CELESTIAL])
+        vmin = np.min(data)
+        vmax = np.max(data)
+        fig = pylab.figure(figsize=(6, 5))
+        ax = fig.add_subplot(111, projection=my_wcs)
+        im= ax.imshow(data, origin='lower', interpolation='nearest', cmap=cmap, vmin=vmin, vmax=vmax)
+        cbar = pylab.colorbar(im, ax=ax)
+        cbar.set_label(header['BUNIT'])
+        ax.coords[0].set_axislabel('R.A. [deg]')
+        ax.coords[1].set_axislabel('Dec [deg]')
+        pylab.grid(lw=1, color='black')
+        pylab.show()
+
+    def delete_trash(self):
+        """
+        Delete unecessary files created during execution
+        """
+        os.system('rm -rf *.log')
+        os.system('rm -rf *.log~')
+        os.system('rm -rf *.last')
+        os.system('rm -rf *.last~')

@@ -244,7 +244,7 @@ class Test_BeamOnly():
         np.testing.assert_almost_equal(catd.azalt_array[0, :, :], azs)
         np.testing.assert_almost_equal(catd.azalt_array[1, :, :], alts)
         bms = bs.BeamOnly(cat=catd, bm_pix=31)
-        bms.construct_sys(catalog_flux=fluxvals)
+        bms.add_eqs(catalog_flux=fluxvals)
         nt.assert_equal(eqs, bms.eqs)
         sol = bms.solve()
         obsbeam = bms.eval_sol(sol)
@@ -336,7 +336,7 @@ class Test_BeamCat():
 		np.testing.assert_almost_equal(catd.azalt_array[0, :, :], azs)
 		np.testing.assert_almost_equal(catd.azalt_array[1, :, :], alts)
 		bmc = bs.BeamCat(cat=catd, bm_pix=31)
-		bmc.construct_sys(catalog_flux=fluxvals, bvals=np.ones((bm_pix, bm_pix)), constrain=True)
+		bmc.add_eqs(catalog_flux=fluxvals, bvals=np.ones((bm_pix, bm_pix)), constrain=True)
 		sol = bmc.solve()
 		fluxvals, obsbeam = bmc.eval_sol(sol)
 		np.testing.assert_allclose(obsbeam, interp2d)
@@ -422,7 +422,7 @@ class Test_BeamOnlyCross():
                 
                 A_s = (bm_true[rtx_px0[j],rty_px0[j]] * w0[j] + bm_true[rtx_px0[j],rty_px1[j]] * w1[j] + bm_true[rtx_px1[j],rty_px0[j]] * w2[j] + bm_true[rtx_px1[j], rty_px1[j]] * w3[j])
                 I_s = fluxvals[i] * A_s
-		newdata[1, i, j] = I_s
+                newdata[1, i, j] = I_s
                 c = {mk_key(unravel_pix(bm_pix, rps[p][0,j], rps[p][1,j]), i, j): ws[p][j] for p in xrange(len(ps))}
                 eq = ' + '.join([mk_key(unravel_pix(bm_pix, rps[p][0,j], rps[p][1,j]), i, j) + \
                     '*b%d'%(unravel_pix(bm_pix, rps[p][0,j], rps[p][1,j])) for p in xrange(len(ps))])
@@ -448,7 +448,7 @@ class Test_BeamOnlyCross():
         np.testing.assert_almost_equal(catd.azalt_array[0, :, :], azs)
         np.testing.assert_almost_equal(catd.azalt_array[1, :, :], alts)
         bms = bs.BeamOnlyCross(cat=catd, bm_pix=31)
-        bms.construct_sys(catalog_flux_xx=fluxvals, catalog_flux_yy=fluxvals, theta_yy=[np.pi/2], flip_yy=[-1])
+        bms.add_eqs(catalog_flux_xx=fluxvals, catalog_flux_yy=fluxvals, theta_yy=[np.pi/2], flip_yy=[-1])
         sol = bms.solve()
         obsbeam = bms.eval_sol(sol)
         diff = obsbeam - interp2d.reshape((bm_pix, bm_pix))
@@ -563,7 +563,7 @@ class Test_BeamCatCross():
         np.testing.assert_almost_equal(catd.azalt_array[0, :, :], azs)
         np.testing.assert_almost_equal(catd.azalt_array[1, :, :], alts)
         bmc = bs.BeamCatCross(cat=catd, bm_pix=31)
-        bmc.construct_sys(catalog_flux_xx=fluxvals, catalog_flux_yy=fluxvals, bvals=np.ones((bm_pix, bm_pix)), flip_yy=[-1])
+        bmc.add_eqs(catalog_flux_xx=fluxvals, catalog_flux_yy=fluxvals, bvals=np.ones((bm_pix, bm_pix)), flip_yy=[-1])
         sol = bmc.solve()
         fluxvals, obsbeam = bmc.eval_sol(sol)
         np.testing.assert_allclose(obsbeam, interp2d)
