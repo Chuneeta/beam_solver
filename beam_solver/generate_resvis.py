@@ -12,7 +12,7 @@ class Resvis(object):
 
     def read_uvfile(self):
         """
-        Reads in calfits file and returns the observed visibilities
+        Reads in  miriad file and returns the observed visibilities
  and the corresponding flags.
 
         Parameters
@@ -105,6 +105,7 @@ class Resvis(object):
         """
         uvd = self.read_uvfile()
         data = uvd.data_array
+        flag = uvd.flag_array
 
         #aa = hc.utils.get_aa_from_uv(uvd)
         #info = hc.omni.aa_to_info(aa)
@@ -115,26 +116,39 @@ class Resvis(object):
 
         # selecting good antennas
         uvf = self.read_uvfits(uvfits)
-        uvf_copy = copy.deepcopy(uvf)
-        mod_bls = np.array(uvf_copy.get_antpairs())
-        aa_mod = hc.utils.get_aa_from_uv(uvf_copy)
+        mod_bls = np.array(uvf.get_antpairs())
 
         omni_gains, omni_flags = hc.io.load_cal(omni_calfits)
         abs_gains, abs_flags = hc.io.load_cal(abs_calfits)
 
-        data_new = copy.deepcopy(data)
+        res_data = np.ndarray((data.shape), dtype=data.dtype)
+        flag_data = np.ndarray((flag.shape), dtype=flag.dtype)
         for mbl in mod_bls:
             bl_grp = red[tuple(mbl) + (pol,)]
-            # somewhow the conjugate model visibilities are stored in the uvfits file
-            mod_data = np.conj(uvf_copy.get_data(tuple(mbl) + (pol,)).copy())
-            mod_data *= omni_gains[mbl[0], 'J{}'.format(pol)] * np.conj(omni_gains[mbl[1], 'J{}'.format(pol)])
-            mod_data /=  abs_gains[mbl[0], 'J{}'.format(pol)]  *  np.conj(abs_gains[mbl[1], 'J{}'.format(pol)])
-            for bl in bl_grp:
-                inds = uvd.antpair2ind(bl[0], bl[1])
-                residual_vis = uvd.get_data(bl)
-                _sh1, _sh2 = mod_data.shape
-                data_new[inds, :, :, :] = data[inds, :, :, :] - mod_data.reshape(_sh1, 1, _sh2, 1)
+            if len(bl_grp) > 1: 
+                # somewhow the conjugate model visibilities are stored in the uvfits file
+                for bl in bl_grp:
+                    mod_data = np.conj(uvf.get_data(tuple(mbl) + (pol,)).copy())
+                    inds = uvd.antpair2ind(bl[0], bl[1])
+                    _sh1, _sh2 = mod_data.shape
+                    try:
+                        mod_data *= omni_gains[bl[0], 'J{}'.format(pol)] * np.conj(omni_gains[bl[1], 'J{}'.format(pol)])
+                        mod_data /=  abs_gains[bl[0], 'J{}'.format(pol)]  *  np.conj(abs_gains[bl[1], 'J{}'.format(pol)])
+                        mod_data *= ~uvd.get_flags(bl)
+                        data_bl = uvd.get_data(bl) * ~uvd.get_flags(bl)
+                        residual = data_bl - mod_data                    
+                        res_data[inds, :, :, :] = residual.reshape((_sh1, 1, _sh2, 1))
+                    except KeyError:
+                        flag_data[inds, :, :, :] = True
+                        res_data[inds, :, :, :] = 0 + 0j
+                        continue
+            else:
+                inds = uvd.antpair2ind(bl_grp[0][0], bl_grp[0][1])
+                flag_data[inds, :, :, :] = True
+                res_data[inds, :, :, :] = 0 + 0j
+
         # writing data to UV file
         uvd_new = copy.deepcopy(uvd)
-        uvd_new.data_array = data_new
+        uvd_new.data_array = res_data
+        uvd_new.flag_array = flag_data
         uvd_new.write_miriad(outfile, clobber=clobber)

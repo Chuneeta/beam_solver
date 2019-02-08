@@ -6,7 +6,7 @@ import pylab
 import os
 
 class Imaging(object):
-    def __init__(self, ms, imagename):
+    def __init__(self, ms):
         """
         Object to store measurement sets of meausrement files containing visibilities and performs
         operations such as imaging.
@@ -21,9 +21,14 @@ class Imaging(object):
         """
 
         self.ms = ms
-        self.imagename = imagename
 
-    def generate_image(self, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0, del_script=True):
+    def flag_antenna(self, antenna):
+        """
+        Flags antennas
+        """
+        ct.flag_antenna(self.ms, antenna)
+
+    def generate_image(self, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0, del_script=True):
         """
         Generates multi-frequency synthesized images using all baselines within the specified cutoff threshold
 
@@ -36,6 +41,9 @@ class Imaging(object):
             antenna='0&3' uses data from baseline 0-3
             antenna='0&3; 4&3' uses data from baselines 0-3 and 4-3
             Default is ''(all) which uses all the baselines
+
+        imagename : str
+            Name of output casa image.
 
         cellsize: string
             Degrees to be contained in one pixel of the image.
@@ -68,31 +76,37 @@ class Imaging(object):
             Default is True.
         """
 
-        ct.imaging(self.ms, self.imagename, antenna=antenna, cellsize=cellsize, npix=npix, niter=niter, threshold=threshold, weighting=weighting, start=start, stop=stop, uvlength=uvlength, delete=del_script)
+        ct.imaging(self.ms, imagename, antenna=antenna, cellsize=cellsize, npix=npix, niter=niter, threshold=threshold, weighting=weighting, start=start, stop=stop, uvlength=uvlength, delete=del_script)
             
-    def remove_image(self, all=False):
+    def remove_image(self, imagename, all=False):
         """
         Removes unecesssary images spit by CASA
 
         Parameters
         ----------
+        imagename : str
+            Name of output casa image.
+
         all : boolean
             If True, removes the casa image file as well.
             Default is False.
         """
-        os.system('rm -r {}.model'.format(self.imagename))
-        os.system('rm -r {}.flux'.format(self.imagename))
-        os.system('rm -r {}.psf'.format(self.imagename))
-        os.system('rm -r {}.residual'.format(self.imagename))
+        os.system('rm -r {}.model'.format(imagename))
+        os.system('rm -r {}.flux'.format(imagename))
+        os.system('rm -r {}.psf'.format(imagename))
+        os.system('rm -r {}.residual'.format(imagename))
         if all:
-            os.system('rm -r {}.image'.format(self.imagename))
+            os.system('rm -r {}.image'.format(imagename))
 
-    def to_fits(self, fitsname, overwrite=False):
+    def to_fits(self, imagename, fitsname, overwrite=False):
         """
         Convert CASA image file to FITS format
     
         Parameters
         ----------
+        imagename : str
+            Name of output casa image.
+
         fitsname : str
             Name of output fitsfile
 
@@ -100,8 +114,8 @@ class Imaging(object):
             If True, overwrites the existing image with the new one.
             Default is False.
         """
-        input_image = self.imagename + '.image'
-        ct.exportfits(input_image, fitsname=fitsname)
+        input_image = imagename + '.image'
+        ct.exportfits(input_image, fitsname=fitsname, overwrite=overwrite)
 
     def read_fits(self, fitsfile):
         """
@@ -116,7 +130,7 @@ class Imaging(object):
         data = data.squeeze()
         return data, header
 
-    def plot_image(self, fitsfile, cmap='gray', vmin=None, vmax=None):
+    def plot_image(self, fitsfile, cmap='gray', vmin=None, vmax=None, title=''):
         """
         Read in and plot the fisfile into a 2D waterfall plot.
 
@@ -138,8 +152,10 @@ class Imaging(object):
         """
         data, header = self.read_fits(fitsfile)
         my_wcs = wcs.WCS(header, naxis=[wcs.WCSSUB_CELESTIAL])
-        vmin = np.min(data)
-        vmax = np.max(data)
+        if vmin is None:
+            vmin = np.min(data)
+        if vmax is None:
+            vmax = np.max(data)
         fig = pylab.figure(figsize=(6, 5))
         ax = fig.add_subplot(111, projection=my_wcs)
         im= ax.imshow(data, origin='lower', interpolation='nearest', cmap=cmap, vmin=vmin, vmax=vmax)
@@ -148,6 +164,7 @@ class Imaging(object):
         ax.coords[0].set_axislabel('R.A. [deg]')
         ax.coords[1].set_axislabel('Dec [deg]')
         pylab.grid(lw=1, color='black')
+        pylab.title(title, size=12)
         pylab.show()
 
     def delete_trash(self):
