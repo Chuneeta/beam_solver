@@ -1,11 +1,11 @@
 from collections import OrderedDict
-import extract as et
-import coord_utils as ct
+from beam_solver import extract as et
+from beam_solver import coord_utils as ct
+from beam_solver import fits_utils as ft
 import os, sys
-import warnings
+import numpy as np
 import h5py
 import healpy
-import numpy as np
 
 pol2ind = {'xx':0, 'yy': 1}
 
@@ -23,23 +23,19 @@ class catData(object):
         self.Nsrcs  = None
         self.Npols = None
 
-    def get_unique(self, ras, decs, tol=2):
+    def get_unique(self, ras, decs, tol=5):
         """
         Selects only unique sources (right ascensions and declinations) from given celestial coordinates.
-
         Parameters
         ----------
         ras: list of floats
             List of right ascension values in degrees. Default list is empty.
-
         decs : list of floats
             List of declination values in degrees. Default list is empty
-
         tol : float
             Tolerance or radius in arcmin within which a source might be considered as the
-            same source. Default is 2 arcmin.
+            same source. Default is 5 arcmin.
          """
-
         if isinstance(ras, list): ras = np.array(ras)
         if not isinstance(ras, np.ndarray): 
             ras = np.array([ras])
@@ -71,32 +67,41 @@ class catData(object):
         print ('Found {} unique sources out of {}.'.format(len(unq_ras), n0))
         return unq_ras, unq_decs
 
+    def _get_jds(self, fitsfiles):
+        """
+        Get list of julian dates for the list of fitsfiles
+        Parameters
+        ----------
+        fitsfiles: Input list of fitsfiles
+        """
+        jds = []
+        for fn in fitsfiles:
+            fitsinfo = ft.get_fitsinfo(fn)
+            hdr = fitsinfo['hdr']
+            assert 'JD' in hdr.keys(), '{} does not have keyword JD'.format(fn)
+            jds.append(hdr['JD'])
+        return jds
+
     def gen_catalog(self, fitsfiles, ras, decs, flux_type='peak', return_data=False):
         """
         Extracts flux measurements at specified right ascension and declination values from the fitsfiles 
         and generates a catdata object containing the data and necessary metadata for   xx or yy 
         polarization. It can also return a dictionary containing the data and selected metadata.
-
         Parameters
         ---------
         fitsfiles : list of str
-            List of of xx or yy fitsfiles that will be used to generate or extract the source catalog.            
-
+            List of of xx or yy fitsfiles that will be used to generate or extract the source catalog.
         ras : list of float
             List of right ascension values in degrees.
-
         decs : list of floats
             List of declination values in degrees.
-
         flux_type : str
             Type of flux density to store, can be either 'peak' or 'total'. 'peak' returns the peak
             pixel value selected from all the pixels confined within the synthesized beam. 'total' 
             returns the integrated flux density from a gaussian fit around the source.
-
         return_data : boolean
             If True, returns dictionary with the data values and selected metadata.
         """
-
         assert len(ras) == len(decs), "Right ascenscion array should be of the same size as declination array."
         # selecting unique ras and decs
         nsrcs = len(ras)
@@ -108,111 +113,25 @@ class catData(object):
         err_array = np.zeros((1, nsrcs, nfits))
         data_array = np.zeros((1, nsrcs, nfits))
         azalt_array = np.zeros((2, nsrcs, nfits))
-        for i, ra in enumerate(ras):
-            pos_array[0, i] = ra; pos_array[1, i] = decs[i]
-            key = (round(ra, 2), round(decs[i], 2))
+        jds = self._get_jds(fitsfiles)
+        for ii, ra in enumerate(ras):
+            pos_array[0, ii] = ra; pos_array[1, ii] = decs[ii]
+            key = (round(ra, 2), round(decs[ii], 2))
             if not key in srcdict: srcdict[key] = {}
-            for j in xrange(nfits):
-                jdsplt = fitsfiles[j].split('/')[-1].split('.')
-                jd = jdsplt[0] + '.' + jdsplt[1]
-                srcstats = et.get_flux(fitsfiles[j], ra, decs[i], flux_type=flux_type)
-		        # hack to add 5 mins since snapshots were phased to the middle timestamp
-                lst, ha = ct.rajd2ha(ra, float(jd) + 5. / 60. / 24.)
-                az, alt = ct.radec2azalt(float(jd) + 5. / 60. / 24., ra, decs[i])
-                ha_array[i, j] = ha / 15.
-                err_array[0, i, j] = srcstats['error']
-                data_array[0, i, j] = srcstats['flux']
-                azalt_array[0, i, j] = az
-                azalt_array[1, i, j] = alt
+            for jj, fn in enumerate(fitsfiles):
+                srcstats = et.get_peakflux(fn, ra, decs[ii])
+                lst = ct.jd2lst(jds[jj])
+                ha = ct.ralst2ha(ra * np.pi/180, lst)                  
+                az, alt = ct.hadec2azalt(decs[ii] * np.pi/180., ha)
+                ha_array[ii, jj] = ha
+                err_array[0, ii, jj] = srcstats['error']
+                data_array[0, ii, jj] = srcstats['flux']
+                azalt_array[0, ii, jj] = az
+                azalt_array[1, ii, jj] = alt
             # saving to dictionary
-            srcdict[key]['data'] = data_array[:, i,  :]
-            srcdict[key]['error'] = err_array[:, i, :]
-            srcdict[key]['ha'] = ha_array[i, :]
-        # saving attributes to object
-        self.data_array = data_array
-        self.err_array = err_array
-        self.ha_array = ha_array
-        self.pos_array = pos_array
-        self.azalt_array = azalt_array
-        _sh = data_array.shape
-        self.Npols = _sh[0]
-        self.Nsrcs = _sh[1]
-        self.Nfits = _sh[2]
-
-        if return_data:
-            return srcdict
-
-    def gen_polcatalog(self, fitsfiles_xx, fitsfiles_yy, ras, decs, flux_type='peak', return_data=False):
-        """
-        Extracts flux measurements at specified right ascension and declination values from the
-        fitsfiles and generates a catData object containing the data and necessary metadata for
-        xx and yy polarization. It can also return a dictionary containing the data and selected 
-        metadata.
-
-        Parameters
-        ----------
-        fitsfiles_xx : list of str
-            List of of xx fitsfiles that will be used to generate or extract the source catalog.
-
-        fitsfiles_yy : list of str
-            List of of xx fitsfiles that will be used to generate or extract the source catalog.
-
-        ras : list of float
-            List of right ascension values in degrees.
-
-        decs : list of floats
-            List of declination values in degrees.
-
-        flux_type : str
-            Type of flux density to store, can be either 'peak' or 'total'. 'peak' returns the peak
-            pixel value selected from all the pixels confined within the synthesized beam. 'total'
-            returns the integrated flux density from a gaussian fit around the source.
-
-        return_data : boolean
-            If True, returns dictionary with the data values and selected metadata.
-        """
-
-        # checking if leghth of fitsxx is consistent with fitsyy
-        assert len(fitsfiles_xx) == len(fitsfiles_yy), "Fitsfiles for xx and yy polarizations should be of the same length."
-        # checking if length of ras is consistent with decs
-        assert len(ras) == len(decs), "Right ascenscion array should be of the same size as declination array."
-        nsrcs = len(ras)
-        nfits = len(fitsfiles_xx)
-        # initializating source dict and numpy arrays
-        srcdict = OrderedDict()
-        pos_array = np.zeros((2, nsrcs))
-        ha_array = np.zeros((nsrcs, nfits))
-        azalt_array = np.zeros((2, nsrcs, nfits))
-        data_array = np.zeros((2, nsrcs, nfits))
-        err_array = np.zeros((2, nsrcs, nfits))
-        for i, ra in enumerate(ras):
-            pos_array[0, i] = ra; pos_array[1, i] = decs[i]
-            key = (round(ra, 2), round(decs[i], 2))
-            if not key in srcdict: srcdict[key] = {}
-            for j in xrange(nfits):
-                jdspltxx = fitsfiles_xx[j].split('/')[-1].split('.')
-                jdxx = jdspltxx[0] + '.' + jdspltxx[1]
-                jdspltyy = fitsfiles_yy[j].split('/')[-1].split('.')
-                jdyy = jdspltyy[0] + '.' + jdspltyy[1]
-                if jdxx != jdxx:
-                    print 'Skipping: mismatch in julian dates.'
-                    continue
-                srcstatsxx = et.get_flux(fitsfiles_xx[j], ra, decs[i])
-                srcstatsyy = et.get_flux(fitsfiles_yy[j], ra, decs[i])
-                # hack to add 5 mins since snapshots were phased to the middle timestamp
-                lst, ha = ct.rajd2ha(ra, float(jdxx) + 5. / 60. / 24.)
-                az, alt = ct.radec2azalt(float(jdxx) + 5. / 60. / 24., ra, decs[i])
-                ha_array[i, j] = ha / 15.
-                err_array[0, i, j] = srcstatsxx['error']
-                err_array[1, i, j] = srcstatsyy['error']
-                data_array[0, i, j] = srcstatsxx['flux']
-                data_array[1, i, j] = srcstatsyy['flux']
-                azalt_array[0, i, j] = az
-                azalt_array[1, i, j] = alt
-            # saving to dictionary
-            srcdict[key]['data'] = data_array[:, i, :]
-            srcdict[key]['error'] = err_array[:, i, :]
-            srcdict[key]['ha'] = ha_array[i, :]
+            srcdict[key]['data'] = data_array[:, ii,  :]
+            srcdict[key]['error'] = err_array[:, ii, :]
+            srcdict[key]['ha'] = ha_array[ii, :]
         # saving attributes to object
         self.data_array = data_array
         self.err_array = err_array
@@ -296,18 +215,16 @@ class catData(object):
         ----------
         beam : np.ndarray
             Numpy array containing primary beam model values (refer to beam_utils.py).
-        
         pol : str
             Polarization can be xx or yy.
-        """
- 
+        """ 
         azs = self.azalt_array[0, :, :]
         alts = self.azalt_array[1, :, :]
         flux_array = np.ndarray((self.Nsrcs), dtype=float)
         beam_array = np.ndarray((self.Nfits), dtype=float)
         for i in range(self.Nsrcs):
             for j in range(self.Nfits):
-                beam_array[j] = healpy.get_interp_val(beam, np.pi/2 - (alts[i, j] * np.pi/180.), azs[i, j] * np.pi/180.) 
+                beam_array[j] = healpy.get_interp_val(beam, np.pi/2 - (alts[i, j]), azs[i, j]) 
             if self.data_array.shape[0] == 1:
                 flux_array[i] = np.nansum(self.data_array[0, i, :] * beam_array) / np.nansum(beam_array ** 2)
             else:
