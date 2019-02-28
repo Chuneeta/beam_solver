@@ -39,49 +39,6 @@ class BeamFunc():
         """
         return 'w%d_s%d_t%d' % (pixel, srcid, timeid)
 
-    def _mk_eq(self, ps, ws, obs_flux, catalog_flux, srcid, timeid, **kwargs):
-        """
-        Constructs equations that will form the linear system of equations.
-
-        Parameters
-        ---------
-        ps : nd array
-            Numpy array containing the four closest pixel numbers corresponding to the
-            alt-az position of the source
-h
-        ws : ns array
-            Numpy array contining the weights corresponding to the pixel numbers
-
-        obs_flux : float
-            Measured or observed flux value
-
-        catalog_flux : float
-            Catalog or corrected flux value obtained using the flux values from the catalog.
-            Refer to catdata.calc_catalog_flux.    
-
-        srcid : int
-            Source identity.
-
-        timeid : int
-            Time identity or timestamps.
-        """
-        i = srcid; j = timeid
-        c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0,j], ps[p][1,j])), i, j): ws[p][j] for p in xrange(4)}
-        eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
-            + '*b%d'%(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))  for p in xrange(4)])
-        assert eq not in self.eqs, 'equation already exists.'
-        self.eqs[eq] = obs_flux / catalog_flux
-        self.consts.update(c)
-
-    def calc_catalog_flux(self, beam_model, pol):
-       return self.cat.calc_catalog_flux(beam_model, pol)        
-
-    def _build_solver(self, **kwargs):
-        """
-        Builds linsolve solver
-        """
-        self.ls = linsolve.LinearSolver(self.eqs, **self.consts)
-
     def unravel_pix(self, ndim, coord):
         """
         Returns the unraveled/flattened pixel of any (m, n) position
@@ -113,36 +70,32 @@ h
         """
         Returns the four closest pixels to the azimuth-altitude values on the 2D
         grid.
-
         Parameters
         ----------
         azalts : ndarray
-            2D array consisting of the azimuth and alitutes values in degrees.
+            2D array consisting of the azimuth and alitutes values in radians.
         """
-
         # selecting the four closest pixels
-        tx, ty, tz = aipy.coord.azalt2top([azalts[0, :] * np.pi/180., azalts[1, :] * np.pi/180.])
-        tx_px = tx * 0.5 * self.bm_pix + 0.5 * self.bm_pix
-        ty_px = ty * 0.5 * self.bm_pix + 0.5 * self.bm_pix
+        tx, ty, tz = aipy.coord.azalt2top([azalts[0, :], azalts[1, :]])
+        tx_r, ty_r = np.dot(self.rotate_mat(theta), np.array([tx, ty]))
+        tx_r *= flip
+        tx_px = tx_r * 0.5 * self.bm_pix + 0.5 * self.bm_pix - 0.5
+        ty_px = ty_r * 0.5 * self.bm_pix + 0.5 * self.bm_pix - 0.5
+        tx_px = np.where(tx_px < 0, 0, tx_px)
+        ty_px = np.where(ty_px < 0, 0, ty_px)
         tx_px0 = np.floor(tx_px).astype(np.int)
         tx_px1 = np.clip(tx_px0 + 1, 0, self.bm_pix - 1)
         ty_px0 = np.floor(ty_px).astype(np.int)
-        ty_px1 = np.clip(ty_px0 + 1, 0, self.bm_pix - 1)
+        ty_px1 = np.clip(ty_px0 + 1, 0, self.bm_pix - 1)        
 
-	x0y0 = np.dot(self.rotate_mat(theta), np.array([tx_px0, ty_px0], dtype=np.int))
-        x0y1 = np.dot(self.rotate_mat(theta), np.array([tx_px0, ty_px1], dtype=np.int))
-        x1y0 = np.dot(self.rotate_mat(theta), np.array([tx_px1, ty_px0], dtype=np.int))
-        x1y1 = np.dot(self.rotate_mat(theta), np.array([tx_px1, ty_px1], dtype=np.int))
-
-	x0y0[0] = flip * x0y0[0]
-        x0y1[0] = flip * x0y1[0]
-        x1y0[0] = flip * x1y0[0]
-        x1y1[0] = flip * x1y1[0]
+        x0y0 = np.array([tx_px0, ty_px0])
+        x0y1 = np.array([tx_px0, ty_px1])
+        x1y0 = np.array([tx_px1, ty_px0])
+        x1y1 = np.array([tx_px1, ty_px1])
 
         # defining the weights
         fx = tx_px - tx_px0
         fy = ty_px - ty_px0
-        
         w0 = (1 - fx) * (1 - fy)
         w1 = fx * (1 - fy)
         w2 = (1 - fx) * fy
@@ -150,29 +103,49 @@ h
         
         ps = [x0y0, x0y1, x1y0, x1y1]
         ws = [w0, w1, w2, w3]
-	
+	    
         return ps, ws
 
-    def rotate_coord(self, theta, coord):
+    def _mk_eq(self, ps, ws, obs_flux, catalog_flux, srcid, timeid, **kwargs):
         """
-        Rotates a point about the origin/center of the beam grid
-
+        Constructs equations that will form the linear system of equations.
         Parameters
-        ----------
-        theta :  float
-            Angle in radians by the which the coordinates will be rotated
-
-        coord : numpy.nd array
-            2D numpy array with the first axis representing the x-coordinates and
-            the second axis representing the y-axis.
+        ---------
+        ps : nd array
+            Numpy array containing the four closest pixel numbers corresponding to the
+            alt-az position of the source
+        ws : ns array
+            Numpy array contining the weights corresponding to the pixel numbers
+        obs_flux : float
+            Measured or observed flux value
+        catalog_flux : float
+            Catalog or corrected flux value obtained using the flux values from the catalog.
+            Refer to catdata.calc_catalog_flux.
+        srcid : int
+            Source identity.
+        timeid : int
+            Time identity or timestamps.
         """
-        # here we are assuming a square grid, therefore center of the beam is (x0, y0) = (x0, x0).
-        x0 = int(0.5 * self.bm_pix)
-        y0 = x0
-        x, y = coord[0], coord[1]
-        xr = np.cos(theta) * (x - x0) - np.sin(theta) * (y - y0) + x0
-        yr = np.sin(theta) * (x - x0) + np.cos(theta) * (y - y0) + y0
-        return np.array([xr, yr])
+        i = srcid; j = timeid
+        c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0,j], ps[p][1,j])), i, j): ws[p][j] for p in xrange(4)}
+        eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
+            + '*b%d'%(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))  for p in xrange(4)])
+        #assert eq not in self.eqs, 'equation already exists.'
+        if eq not in self.eqs:
+            self.eqs[eq] = obs_flux / catalog_flux
+            self.consts.update(c)
+
+    def calc_catalog_flux(self, beam_model, pol):
+        """
+        Returns catalog flux
+        """
+        return self.cat.calc_catalog_flux(beam_model, pol)
+
+    def _build_solver(self, **kwargs):
+        """
+        Builds linsolve solver
+        """
+        self.ls = linsolve.LinearSolver(self.eqs, **self.consts)
 
     def get_A(self, ls):
         """
@@ -195,7 +168,6 @@ h
         ----------
 		ls : linsolve instance
             instance of linsolve solver containing the linear system of equations.
-
         A : numpy array/ matrix of floats.
         """
         A.shape = (A.shape[0], A.shape[1])
@@ -209,13 +181,10 @@ h
         """
         Remove degeneracies using single value decomposition. It removes all eigenvalue modes
         above the specified threshold.
-
 		ls : instance of linsolve
 			instance of linsolve solver containing the linear system of equations.
-
         obsbeam : 2D numpy array
             2-dimensional array containing the beam values.
-
         threshold : float
             Threshold value after which all the eigenvalue modes will be discarded.
         """
@@ -257,7 +226,6 @@ class BeamOnly(BeamFunc):
 
         where (a1, a2, a3, a4) are the four closest pixel values of the beam to the azimuth-altitude
         value of the source at a given time and (w1, w2, w3, w4) are the corrsponding weights.
-
         Parameters
         ----------
         catalog_flux : list or np.ndarray
@@ -304,7 +272,7 @@ class BeamOnly(BeamFunc):
         return obs_beam
     
 class BeamCat(BeamOnly):
-    def __init__(self, cat, bm_pix=60):
+    def __init__(self, cat=None, bm_pix=60):
         """
         Object that stores the flux catalog containing the flux values for one
         polarization and solves for both the true flux values of the sources and
@@ -315,26 +283,20 @@ class BeamCat(BeamOnly):
     def _mk_eq(self, ps, ws, obs_flux, catalog_flux, srcid, timeid, **kwargs):
         """
         Constructs equations that will form the linear system of equations.
-
         Parameters
         ---------
         ps : numpy.nd array
             Numpy array containing the four closest pixel numbers corresponding to the
             alt-az position of the source
-
         ws : ns array
             Numpy array contining the weights corresponding to the pixel numbers
-
         obs_flux : float
             Measured or observed flux value
-
         catalog_flux : float
             Catalog or corrected flux value obtained using the flux values from the catalog.
             Refer to catdata.calc_catalog_flux.
-
         srcid : int
             Source identity.
-
         timeid : int
             Time identity or timestamps.
         """
@@ -345,9 +307,10 @@ class BeamCat(BeamOnly):
                     for p in xrange(4)}
         eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
             + '*b%d'% (self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))) + '*I%d'%i for p in xrange(4)])
-        assert eq not in self.eqs, 'equation already exists.'
-        self.eqs[eq] = obs_flux
-        self.consts.update(c)
+        #assert eq not in self.eqs, 'equation already exists.'
+        if eq not in self.eqs:
+            self.eqs[eq] = obs_flux
+            self.consts.update(c)
         for p in xrange(4):
             bpix = int(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))
             self.sol_dict['b%d'%bpix] = bvals[bpix]
@@ -368,7 +331,6 @@ class BeamCat(BeamOnly):
 
         In the non-linear case, we solve for both I_mod and A, however initial guesses are required
         to start the iteration.
-
         Parameters
         ----------
         catalog_flux : list or np.ndarray
