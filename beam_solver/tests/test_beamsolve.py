@@ -3,6 +3,7 @@ from collections import OrderedDict
 from beam_solver import catdata as cd
 from beam_solver import beamsolve as bs
 from beam_solver import beam_utils as bt
+from beam_solver import fits_utils as ft
 import nose.tools as nt
 import numpy as np
 import collections
@@ -12,116 +13,94 @@ import copy
 import pylab
 import linsolve
 
-def mk_key(px, i, t):
-    return 'w%d_s%d_t%d' % (px, i, t)
-
-def unravel_pix(n, i,j):
-    return (i*n) + j
-
-def recenter(a, c):
-    """Slide the (0,0) point of matrix a to a new location tuple c.  This is
-    useful for making an image centered on your screen after performing an
-    inverse fft of uv data."""
-    s = a.shape
-    c = (c[0] % s[0], c[1] % s[1])
-    if np.ma.isMA(a):
-        a1 = np.ma.concatenate([a[c[0]:], a[:c[0]]], axis=0)
-        a2 = np.ma.concatenate([a1[:,c[1]:], a1[:,:c[1]]], axis=1)
-    else:
-        a1 = np.concatenate([a[c[0]:], a[:c[0]]], axis=0)
-        a2 = np.concatenate([a1[:,c[1]:], a1[:,:c[1]]], axis=1)
-    return a2
-
-def get_LM(dim, center=(0,0), res=1):
-        """Get the (l,m) image coordinates for an inverted UV matrix."""
-        M,L = np.indices((dim, dim))
-        L,M = np.where(L > dim/2, dim-L, -L), np.where(M > dim/2, M-dim, M)
-        L,M = L.astype(np.float32)/dim/res, M.astype(np.float32)/dim/res
-        mask = np.where(L**2 + M**2 >= 1, 1, 0)
-        L,M = np.ma.array(L, mask=mask), np.ma.array(M, mask=mask)
-        return recenter(L, center), recenter(M, center)
-
-def get_top(dim, center=(0,0), res=1):
-    """Return the topocentric coordinates of each pixel in the image."""
-    x,y = get_LM(dim, center, res)
-    z = np.sqrt(1 - x**2 - y**2)
-    return x,y,z
-
-def rotate(theta, point):
-        bm_pix = 31
-        x0 = int(0.5 * bm_pix)
-        y0 = x0
-        x, y = point[0], point[1]
-        xr = np.cos(theta) * (x - x0) - np.sin(theta) * (y - y0) + x0
-        yr = np.sin(theta) * (x - x0) + np.cos(theta) * (y - y0) + y0
-        return np.array([xr, yr])
-
-def rotate_mat(theta):
-    """
-    Rotate coordinates or pixels by theta degrees
-
-    Parameters
-    ----------
-    theta : float
-        Angle by which the coordinates or pixels will be rotated.
-    """
-    return np.array([[np.cos(theta), -1*np.sin(theta)], [np.sin(theta), np.cos(theta)]])
-
-# beamfile
 beamfits = os.path.join(DATA_PATH, 'HERA_NF_dipole_power.beamfits')
+fitsfile = os.path.join(DATA_PATH, '2458115.23736.test.xx.fits')
+outfile = fitsfile.replace('.fits', '.mod.fits')
+ras = [74.26237654, 41.91116875, 22.47460079, 9.8393989, 356.25426296]
+decs = [-52.0209015, -43.2292595, -30.27372862, -17.40763737, -0.3692835] 
 
-# xx fitsfiles
-fitsfile1_xx = os.path.join(DATA_PATH, '2458115.23736.xx.fits')
-fitsfile2_xx = os.path.join(DATA_PATH, '2458115.24482.xx.fits')
-fitsfiles_xx = [fitsfile1_xx, fitsfile2_xx]
-
-# yy fitsfiles
-fitsfile1_yy = os.path.join(DATA_PATH, '2458115.23736.yy.fits')
-fitsfile2_yy = os.path.join(DATA_PATH, '2458115.24482.yy.fits')
-fitsfiles_yy = [fitsfile1_yy, fitsfile2_yy]
-
-# right ascension and declination values
-ras = [30.01713089, 27.72922349, 36.75248962, 34.2415497, 78.3776346, 74.03785837]
-decs = [-30.88211818, -29.53377208, -30.63958257, -29.93990039, -30.48595805, -30.08651873]
-
-# generating beam
-beam_xx = bt.get_fitsbeam(beamfits, 151e6, 'xx')
-beam_yy = bt.get_fitsbeam(beamfits, 151e6, 'yy')
-
-# generating catalog
+ft.add_keyword(fitsfile, 'JD', 2458115.23736, outfile, overwrite=True)
 catd = cd.catData()
-catd.gen_catalog(fitsfiles_xx, ras, decs)
+catd.gen_catalog([outfile], ras, decs)
+
+def create_catdata(azalt, data, nsrcs, npoints):
+    catd = cd.catData()
+    catd.azalt_array = azalt
+    catd.data_array = data
+    catd.Nfits = npoints
+    catd.Nsrcs = nsrcs
+    return catd
+
+def gen_catdata_zensrc(fluxval, sigma=1):
+    azs = np.array([[np.pi/2]]); alts=np.array([[np.pi/2]])
+    top = aipy.coord.azalt2top([azs, alts])
+    data = bt.get_src_tracks(top, fluxval, sigma_x=sigma)
+    data = data.reshape((1, 1, 1))
+    catd = create_catdata(np.array([azs, alts]), data, 1, 1)
+    return catd
+
+def gen_random_track(npoints, fluxval, sigma=1):
+    azs = np.random.uniform(np.pi/2, 3*np.pi/2, npoints)
+    azs = np.sort(azs)
+    alts = np.random.uniform(0, np.pi/2, npoints/2)
+    alts = np.sort(alts)
+    alts = np.append(alts[:-1], np.append(alts[::-1], 0))
+    top = aipy.coord.azalt2top([azs, alts])
+    data = bt.get_src_tracks(top, fluxval, sigma_x=sigma)
+    return np.array([azs, alts]), data
+
+def gen_catdata_nsrcs(nsrcs, npoints,fluxvals, sigma=1):
+    data_arr = np.zeros((1, nsrcs, npoints))
+    azalt_arr = np.zeros((2, nsrcs, npoints))
+    for ii in xrange(nsrcs):
+        azalt, data = gen_random_track(npoints, fluxvals[ii], sigma)
+        data_arr[0, ii, :] = data
+        azalt_arr[0, ii, :] = azalt[0]
+        azalt_arr[1, ii, :] = azalt[1]
+    catd = create_catdata(azalt_arr, data_arr, nsrcs, npoints)
+    return catd
+
+def gen_catdata_grid(npix, fluxvals, sigma_x, sigma_y=None):
+    if sigma_y is None: sigma_y = sigma_x
+    tx, ty, tz = bt.get_top(npix, center=(npix/2, npix/2), res=1)
+    azs, alts = aipy.coord.top2azalt(np.array([tx, ty, tz]))
+    data_arr = np.zeros((1, npix, npix))
+    for ii in xrange(npix):
+        data_arr[0, ii, :] = bt.get_src_tracks(np.array([tx[ii,: ], ty[ii, :], tz[ii, :]]), fluxvals[ii], sigma_x=sigma_x, sigma_y=sigma_y)    
+    catd = create_catdata(np.array([azs, alts]), data_arr, npix, npix)
+    return catd
 
 class Test_BeamFunc():
     def test_init(self):
-        bms = bs.BeamOnly(catd)
+        catd = cd.catData()
+        bms = bs.BeamFunc(catd)
         nt.assert_equal(bms.bm_pix, 60)
         nt.assert_equal(bms.cat, catd)
-        bms = bs.BeamOnly(catd, 30)
+        bms = bs.BeamFunc(catd, 30)
         nt.assert_equal(bms.bm_pix, 30)
         nt.assert_equal(bms.cat, catd)
 
     def test_mk_key(self):
-        bms = bs.BeamOnly(catd)
+        bms = bs.BeamFunc()
         key = bms._mk_key(0, 0, 0)
         nt.assert_equal(key, 'w0_s0_t0')
         key = bms._mk_key(0, 1, 4)
         nt.assert_equal(key, 'w0_s1_t4')
-
+       
     def test_unravel_pix(self):
-        bms = bs.BeamOnly(catd)
+        bms = bs.BeamFunc()
         ind = bms.unravel_pix(60, (0, 0))
         nt.assert_equal(ind, 0)
         ind = bms.unravel_pix(60, (0, 5))
         nt.assert_equal(ind, 5)    
-        bms = bs.BeamOnly(catd, bm_pix=30)
+        bms = bs.BeamFunc(catd, bm_pix=30)
         ind = bms.unravel_pix(30, (0, 5))
         nt.assert_equal(ind, 5)
         ind = bms.unravel_pix(30, (2, 5))
         nt.assert_equal(ind, 65)
 
     def test_rotate_mat(self):
-        bms = bs.BeamOnly(catd)
+        bms = bs.BeamFunc(bm_pix=31)
         theta = 0
         mat0 = np.array([[np.cos(theta), -1 * np.sin(theta)], [np.sin(theta), np.cos(theta)]])
         mat = bms.rotate_mat(theta)
@@ -139,433 +118,306 @@ class Test_BeamFunc():
         mat = np.array([[1., 0.], [0., 1.]])
         np.testing.assert_almost_equal(mat, mat0)
 
-    def test_rotate_coord(self):
-        bms = bs.BeamOnly(catd, bm_pix=31)
-        rcoord = bms.rotate_coord(0, np.array([0, 0]))
-        np.testing.assert_almost_equal(rcoord, np.array([0, 0]))
-        rcoord = bms.rotate_coord(np.pi/2, np.array([15., 15.]))
-        np.testing.assert_almost_equal(rcoord, np.array([15., 15.]))
-        rcoord = bms.rotate_coord(-1 * np.pi/2, np.array([15., 15.]))
-        np.testing.assert_almost_equal(rcoord, np.array([15., 15.]))
-        rcoord = bms.rotate_coord(np.pi/2, np.array([14., 15.]))
-        np.testing.assert_almost_equal(rcoord, np.array([15., 14.]))
-        rcoord = bms.rotate_coord(-1 * np.pi/2, np.array([14., 15.]))
-        np.testing.assert_almost_equal(rcoord, np.array([15., 16.]))
-        rcoord = bms.rotate_coord(2 * 2 * np.pi, np.array([14., 15.]))
-        np.testing.assert_almost_equal(rcoord, np.array([14., 15.]))
-
     def test_get_weights(self):
-        bms = bs.BeamOnly(catd, 4)
-        ps, ws = bms.get_weights(np.array([[0], [0]]), 0, 1)
-        bms = bs.BeamOnly(catd, 12)
-        ps, ws = bms.get_weights(np.array([[0], [0]]), 0, 1)
-        nt.assert_equal(ps[0][0][0], ps[1][0][0])
-        nt.assert_equal(ps[2][0][0], ps[3][0][0])
-        nt.assert_equal(ps[0][1][0], ps[2][1][0])
-        nt.assert_equal(ps[1][1][0], ps[3][1][0])
-        nt.assert_almost_equal(np.sum(ws), 1)
-        bms = bs.BeamOnly(catd)
-        ps, ws = bms.get_weights(np.array([[0], [0]]), 0, 1)
-        nt.assert_equal(ps[0][0][0], ps[1][0][0])
-        nt.assert_equal(ps[2][0][0], ps[3][0][0])
-        nt.assert_equal(ps[0][1][0], ps[2][1][0])
-        nt.assert_equal(ps[1][1][0], ps[3][1][0])
-        nt.assert_almost_equal(np.sum(ws), 1)
+        bms = bs.BeamFunc(bm_pix=31)
+        ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
+        nt.assert_equal(len(ps), 4)
+        nt.assert_equal(len(ws), 4)
+        np.testing.assert_equal(ps, [np.array([[15], [15]]), np.array([[15], [16]]), np.array([[16], [15]]), np.array([[16], [16]])]) 
+        nt.assert_almost_equal(np.sum(ws), 1.0)
+        np.testing.assert_almost_equal(ws, [np.array([1.0]), np.array([0.]), np.array([0.]), np.array([0.])])
+
+    def test_rotate_ps(self):
+        bms = bs.BeamFunc(bm_pix=31)
+        ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 2*np.pi, 1)
+        np.testing.assert_equal(ps, [np.array([[15], [15]]), np.array([[15], [16]]), np.array([[16], [15]]), np.array([[16], [16]])])
+        bms = bs.BeamFunc(catd, 31)
+        ps, ws = bms.get_weights(np.array([[np.pi/4], [np.pi/4]]), np.pi/2, 1)
+        ps_270, ws_270 = bms.get_weights(np.array([[np.pi/4], [np.pi/4]]), -3 * np.pi/2, 1)
+        np.testing.assert_almost_equal(ps, ps_270)
+        np.testing.assert_almost_equal(ws, ws_270)
+
+    def test_flip_ps(self):
+        bms = bs.BeamFunc(bm_pix=31)
+        ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, -1)
+        np.testing.assert_equal(ps, [np.array([[15], [15]]), np.array([[15], [16]]), np.array([[16], [15]]), np.array([[16], [16]])])            
+        bms = bs.BeamFunc(bm_pix=31)
+        ps, ws = bms.get_weights(np.array([[np.pi/4], [np.pi/4]]), 0, 1)
+        ps_f, ws_f = bms.get_weights(np.array([[np.pi/4], [np.pi/4]]), 0, -1)
+        for i in range(len(ps)):
+            nt.assert_almost_equal(ps_f[i][0], ps[i][0] - 15)
+
+    def test_mk_eq(self):
+        bms = bs.BeamFunc(bm_pix=31)
+        ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
+        bms._mk_eq(ps, ws, 1, 1, 0, 0)
+        eq_keys = bms.eqs.keys()
+        cns_keys = bms.consts.keys()
+        nt.assert_almost_equal(len(eq_keys), 1)
+        px0 = bms.unravel_pix(31, (15, 15))
+        px1 = bms.unravel_pix(31, (15, 16))
+        px2 = bms.unravel_pix(31, (16, 15))
+        px3 = bms.unravel_pix(31, (16, 16)) 
+        eq0 = 'w%s_s0_t0*b%s + w%s_s0_t0*b%s + w%s_s0_t0*b%s + w%s_s0_t0*b%s'%(px0, px0, px1, px1, px2, px2, px3, px3)
+        nt.assert_equal(eq_keys[0], eq0)
+    
+    def test_eqs(self):
+        bms = bs.BeamFunc(catd, 31)
+        ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
+        bms._mk_eq(ps, ws, 1, 1, 0, 0)
+        eq_keys = bms.eqs.keys()
+        nt.assert_almost_equal(bms.eqs[eq_keys[0]], 1)
+
+    def test_consts(self):
+        bms = bs.BeamFunc(bm_pix=31)
+        ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
+        bms._mk_eq(ps, ws, 1, 1, 0, 0)
+        cns_keys = bms.consts.keys()
+        nt.assert_almost_equal(len(cns_keys), 4)
+        px0 = bms.unravel_pix(31, (15, 15))
+        nt.assert_almost_equal(bms.consts['w%s_s0_t0'%px0], 1.0)   
+ 
+    def test_calc_catalog_flux(self):
+        bms = bs.BeamFunc(catd, 31)
+        beam = bt.get_fitsbeam(beamfits, 151e6)
+        catalog_flux = bms.calc_catalog_flux(beam, 'xx')
+        nt.assert_almost_equal(catalog_flux[2], 1.000, 3)
+
+    def test_build_solver(self):
+        bms = bs.BeamFunc(bm_pix=31)
+        ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
+        bms._mk_eq(ps, ws, 1, 1, 0, 0)
+        bms._build_solver()
+        nt.assert_true(isinstance(bms.ls, linsolve.LinearSolver))
+
+    def test_get_A(self):
+        bms = bs.BeamFunc(bm_pix=31)
+        ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
+        bms._mk_eq(ps, ws, 1, 1, 0, 0)
+        bms._build_solver()
+        A = bms.get_A(bms.ls)
+        np.testing.assert_almost_equal(A, np.array([[[0.], [0.], [0.], [1.]]]))
+
+    def test_svd(self):
+        bms = bs.BeamFunc(bm_pix=31)
+        ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
+        bms._mk_eq(ps, ws, 1, 1, 0, 0)
+        bms._build_solver()
+        A = bms.get_A(bms.ls)
+        U, S, V = bms.svd(bms.ls, A)
+        nt.assert_almost_equal(S[0], 1.0)
+        np.testing.assert_almost_equal(np.dot(U, U.T), np.identity(4))
+        np.testing.assert_almost_equal(np.dot(V, V.T), np.identity(4))
+
+    def test_remove_degen(self):
+        pass
 
 class Test_BeamOnly():
-    def test_solve(self):
-        consts = OrderedDict()
-        eqs = OrderedDict()
-        catd = cd.catData()
-        catd.gen_catalog(fitsfiles_xx, ras, decs)
-        bm_pix = 31
-        bm_true = np.zeros((bm_pix, bm_pix), dtype=float)
-        bmx, bmy = np.indices(bm_true.shape)
-        mu = 15.; sigma=3.
-        bm_true = np.exp(-((bmx-mu)**2 + (bmy-mu)**2)/ (2 * sigma**2))
-        tx0, ty0, tz0 = get_top(bm_pix, center=(15, 15), res=0.5)
-        tx00, ty00, tz00 = tx0.flatten(), ty0.flatten(), tz0.flatten()
-        indices = np.arange(bm_pix**2)
-        azs, alts = aipy.coord.top2azalt([np.array(tx0[:, :]), np.array(ty0[:, :]), np.array(tz0[:, :])])
-        #azs, alts = aipy.coord.top2azalt([np.array(tx0[15:16,15:16]), np.array(ty0[15:16, 15:16]), np.array(tz0[15:16, 15:16])])
-        azs = np.rad2deg(azs); alts = np.rad2deg(alts)
-        _sh = azs.shape
-        fluxvals = np.random.random(_sh[0]) + 10
-        newdata = np.zeros((2, _sh[0], _sh[1]))
-        for i in range(_sh[0]):
-            tx, ty, tz = aipy.coord.azalt2top([np.deg2rad(azs[i, :]), np.deg2rad(alts[i, :])])
-            tx_px = tx * 0.5 * bm_pix + 0.5 * bm_pix
-            tx_px0 = np.floor(tx_px).astype(np.int)
-            tx_px1 = np.clip(tx_px0 + 1, 0, bm_pix - 1)
-            fx = tx_px - tx_px0
-            ty_px = ty * 0.5 * bm_pix + 0.5 * bm_pix
-            ty_px0 = np.floor(ty_px).astype(np.int)
-            ty_px1 = np.clip(ty_px0 + 1, 0, bm_pix - 1)
-            fy = ty_px - ty_px0
-            x0y0 = np.array([tx_px0, ty_px0], dtype=np.int)
-            x0y1 = np.array([tx_px0, ty_px1], dtype=np.int)
-            x1y0 = np.array([tx_px1, ty_px0], dtype=np.int)
-            x1y1 = np.array([tx_px1, ty_px1], dtype=np.int)
+    def test_add_eqs(self):
+        fluxval = np.array([2.0])
+        catd = gen_catdata_zensrc(fluxval, sigma=2)
+        bms = bs.BeamOnly(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux=fluxval)
+        eq_keys = bms.eqs.keys()
+        nt.assert_equal(len(eq_keys), 1)
 
-            w0 = (1 - fx) * (1 - fy)
-            w1 = fx * (1 - fy)
-            w2 = (1 - fx) * fy
-            w3 = fx * fy
+    #def test_repeat_add_eqs(self):
+    #    fluxval = np.array([2.0])
+    #    catd = gen_catdata_zensrc(fluxval, sigma=2)
+    #    bms = bs.BeamOnly(cat=catd, bm_pix=31)
+    #    bms.add_eqs(catalog_flux=fluxval)
+    #    nt.assert_raises(AssertionError, bms.add_eqs, catalog_flux=fluxval)
 
-            ps = [x0y0, x0y1, x1y0, x1y1]
-            ws = [w0, w1, w2, w3]
-            
-            for j in range(_sh[1]):
-                A_s = (bm_true[tx_px0[j],ty_px0[j]] * w0[j] + bm_true[tx_px0[j],ty_px1[j]] * w1[j] + bm_true[tx_px1[j],ty_px0[j]] * w2[j] + bm_true[tx_px1[j], ty_px1[j]] * w3[j])
-                I_s = fluxvals[i] * A_s
-                newdata[0, i, j] = I_s
-                c = {mk_key(unravel_pix(bm_pix, ps[p][0,j], ps[p][1,j]), i, j): ws[p][j] for p in xrange(len(ps))}
-                eq = ' + '.join([mk_key(unravel_pix(bm_pix, ps[p][0,j], ps[p][1,j]), i, j) + \
-                    '*b%d'%(unravel_pix(bm_pix, ps[p][0,j], ps[p][1,j])) for p in xrange(len(ps))])
-                eqs[eq] = I_s / fluxvals[i]
-                consts.update(c)
+    def test_eval_sol(self):
+        sol = {'b1': 1}
+        bms = bs.BeamOnly(bm_pix=31)
+        output = bms.eval_sol(sol)
+        answer = np.zeros((31, 31))
+        answer.flat[1] = 1
+        np.testing.assert_equal(output, answer)
+        sol = {'b%d'%i:1 for i in range(31**2)}
+        output = bms.eval_sol(sol)
+        answer = np.ones((31, 31))
+        np.testing.assert_equal(output, answer)
 
-        eqs_noise = {k:v for k,v in eqs.items()}
-        ls = linsolve.LinearSolver(eqs_noise, **consts)
-        sol0 = ls.solve(verbose=True)
-        interp2d = np.zeros((bm_pix**2))
-        for key in sol0.keys():
-            px = int(key.strip('b'))
-            interp2d[px] = sol0.get(key)
+    def test_sol_keys(self):
+        fluxval = np.array([2.0])
+        catd = gen_catdata_zensrc(fluxval, sigma=2)
+        bms = bs.BeamOnly(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux=fluxval)
+        sol = bms.solve()
+        nt.assert_equal(len(sol.keys()), 4)
+        nt.assert_true('b{}'.format(bms.unravel_pix(31, (15, 15))) in sol.keys())
+        nt.assert_true('b{}'.format(bms.unravel_pix(31, (15, 16))) in sol.keys())
+        nt.assert_true('b{}'.format(bms.unravel_pix(31, (16, 15))) in sol.keys())
+        nt.assert_true('b{}'.format(bms.unravel_pix(31, (16, 16))) in sol.keys())
 
-        # testing beamonly solver
-        catd.azalt_array = np.zeros((2, _sh[0], _sh[1]))
-        catd.azalt_array[0, :, :] = azs
-        catd.azalt_array[1, :, :] = alts
-        catd.Nsrcs = _sh[0]
-        catd.Nfits = _sh[1]
-        catd.data_array = newdata
-        np.testing.assert_almost_equal(catd.data_array, newdata)
-        np.testing.assert_almost_equal(catd.azalt_array[0, :, :], azs)
-        np.testing.assert_almost_equal(catd.azalt_array[1, :, :], alts)
+    def test_sol_values(self):
+        fluxval = np.array([2.0])
+        catd = gen_catdata_zensrc(fluxval, sigma=2)
+        bms = bs.BeamOnly(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux=fluxval)
+        sol = bms.solve()
+        nt.assert_true(sol['b{}'.format(bms.unravel_pix(31, (15, 15)))], 1.0) 
+
+    def test_solve_src(self):
+        fluxval = np.array([2.0])
+        catd = gen_catdata_zensrc(fluxval, sigma=2)
+        bms = bs.BeamOnly(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux=fluxval)
+        sol = bms.solve()
+        obsbeam = bms.eval_sol(sol)       
+        answer = np.zeros((31, 31))
+        answer[15, 15] = 1
+        np.testing.assert_almost_equal(obsbeam, answer)
+    
+    def test_solve_grid(self):
+        fluxvals = np.random.random(50) + 10
+        catd = gen_catdata_grid(50, fluxvals, sigma_x=0.2)
         bms = bs.BeamOnly(cat=catd, bm_pix=31)
         bms.add_eqs(catalog_flux=fluxvals)
-        nt.assert_equal(eqs, bms.eqs)
         sol = bms.solve()
         obsbeam = bms.eval_sol(sol)
-        diff = obsbeam - bm_true
-        np.testing.assert_allclose(diff, np.zeros((bm_pix, bm_pix)), rtol=1e-05, atol=1e-05)
-        np.testing.assert_allclose(obsbeam, bm_true, rtol=1e-05, atol=1e-05)
-        cleanbeam = bms.remove_degen(bms.ls, obsbeam)
-        np.testing.assert_allclose(cleanbeam, bm_true, rtol=1e-05, atol=1e-05)
+        gaussbeam = bt.get_gaussbeam(3, mu_x=15, mu_y=15, size=31)
+        np.testing.assert_allclose(gaussbeam, obsbeam, atol=1e-01) # most values are equal to 1e-2, with some exceptions
+
+    def test_beam_rotate(self):
+        fluxvals = np.random.random(50) + 10
+        catd = gen_catdata_grid(50, fluxvals, sigma_x=0.4, sigma_y=0.2)
+        bms = bs.BeamOnly(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux=fluxvals)
+        sol = bms.solve()
+        obsbeam = bms.eval_sol(sol)
+        bms = bs.BeamOnly(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux=fluxvals, theta=[np.pi/2])
+        sol = bms.solve()
+        obsbeam_90 = bms.eval_sol(sol)
+        np.testing.assert_allclose(obsbeam, np.rot90(obsbeam_90), atol=1e-01)
 
 class Test_BeamCat():
-	def test_solve(self):
-		consts = OrderedDict()
-		eqs = OrderedDict()
-		sol_dict = OrderedDict()
-		catd = cd.catData()
-		catd.gen_catalog(fitsfiles_xx, ras, decs)
-		bm_pix = 31
-		interp2d = np.zeros((bm_pix**2))
-		bm_true = np.zeros((bm_pix, bm_pix), dtype=float)
-		bmx, bmy = np.indices(bm_true.shape)
-		mu = 15.; sigma=3.
-		bm_true = np.exp(-((bmx-mu)**2 + (bmy-mu)**2)/ (2 * sigma**2))
-		tx0, ty0, tz0 = get_top(bm_pix, center=(15, 15), res=0.5)
-		tx00, ty00, tz00 = tx0.flatten(), ty0.flatten(), tz0.flatten()
-		indices = np.arange(bm_pix**2)
-		#azs, alts = aipy.coord.top2azalt([np.array(tx0[:, :]), np.array(ty0[:, :]), np.array(tz0[:, :])])
-		azs, alts = aipy.coord.top2azalt([np.array(tx0[15:16,15:16]), np.array(ty0[15:16, 15:16]), np.array(tz0[15:16, 15:16])])
-		azs = np.rad2deg(azs); alts = np.rad2deg(alts)
-		_sh = azs.shape
-		fluxvals = np.random.random(_sh[0]) + 10
-		newdata = np.zeros((1, _sh[0], _sh[1]))
+    def test_mk_eq(self):
+        bms = bs.BeamCat(bm_pix=31)
+        ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
+        bms._mk_eq(ps, ws, 1, 1, 0, 0, bvals=np.ones((31, 31)))
+        eq_keys = bms.eqs.keys()
+        cns_keys = bms.consts.keys()
+        nt.assert_almost_equal(len(eq_keys), 1)
+        px0 = bms.unravel_pix(31, (15, 15))
+        px1 = bms.unravel_pix(31, (15, 16))
+        px2 = bms.unravel_pix(31, (16, 15))
+        px3 = bms.unravel_pix(31, (16, 16))
+        eq0 = 'w%s_s0_t0*b%s*I0 + w%s_s0_t0*b%s*I0 + w%s_s0_t0*b%s*I0 + w%s_s0_t0*b%s*I0'%(px0, px0, px1, px1, px2, px2, px3, px3)
+        nt.assert_equal(eq_keys[0], eq0)
 
-		for i in range(_sh[0]):
-			tx, ty, tz = aipy.coord.azalt2top([np.deg2rad(azs[i,:]), np.deg2rad(alts[i,:])])
-			tx_px = tx * 0.5*bm_pix + 0.5*bm_pix
-			tx_px0 = np.floor(tx_px).astype(np.int)
-			tx_px1 = np.clip(tx_px0+1,0,bm_pix-1)#tx_px0 + 1
-			fx = tx_px - tx_px0
-			ty_px = ty * 0.5*bm_pix + 0.5*bm_pix
-			ty_px0 = np.floor(ty_px).astype(np.int)
-			ty_px1 = np.clip(ty_px0 + 1,0,bm_pix-1)#ty_px0 + 1
-			fy = ty_px - ty_px0
-			x0y0 = np.array([tx_px0, ty_px0], dtype=np.int)
-			x0y1 = np.array([tx_px0, ty_px1], dtype=np.int)
-			x1y0 = np.array([tx_px1, ty_px0], dtype=np.int)
-			x1y1 = np.array([tx_px1, ty_px1], dtype=np.int)
+    def test_consts(self):
+        bms = bs.BeamCat(cat=catd, bm_pix=31)
+        ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
+        bms._mk_eq(ps, ws, 1, 1, 0, 0, bvals=np.ones((31, 31)))
+        cns_keys = bms.consts.keys()
+        nt.assert_almost_equal(len(cns_keys), 4)
+        px0 = bms.unravel_pix(31, (15, 15))
+        nt.assert_almost_equal(bms.consts['w%s_s0_t0'%px0], 1.0)
 
-			w0 = (1 - fx) * (1 - fy)
-			w1 = fx * (1 - fy)
-			w2 = (1 - fx) * fy
-			w3 = fx * fy
+    def test_add_eqs(self):
+        fluxval = np.array([2.0])
+        catd = gen_catdata_zensrc(fluxval, sigma=2)
+        bms = bs.BeamCat(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux=fluxval, bvals=np.ones((31, 31)))
+        eq_keys = bms.eqs.keys()
+        nt.assert_equal(len(eq_keys), 1)
 
-			ps = [x0y0, x0y1, x1y0, x1y1]
-			ws = [w0, w1, w2, w3]
+    def test_eqs(self):
+        fluxval = np.array([2.0])
+        catd = gen_catdata_zensrc(fluxval, sigma=2)
+        bms = bs.BeamCat(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux=fluxval, bvals=np.ones((31, 31)))
+        eq_keys = bms.eqs.keys()
+        nt.assert_almost_equal(bms.eqs[eq_keys[0]], 2.0)
 
-			sol_dict['I%d'%i] = fluxvals[i]
-			for j in range(_sh[1]):
-				weights = w0[j] + w1[j] + w2[j] + w3[j]
-				A_s = (bm_true[tx_px0[j],ty_px0[j]] * w0[j] + bm_true[tx_px0[j],ty_px1[j]] * w1[j] \
-				  + bm_true[tx_px1[j],ty_px0[j]] * w2[j] + bm_true[tx_px1[j], ty_px1[j]] * w3[j])
-				I_s = fluxvals[i] * A_s
-				newdata[0, i, j] = I_s
-				c = {mk_key(unravel_pix(bm_pix, ps[p][0,j], ps[p][1,j]), i, j): ws[p][j] for p in xrange(len(ps))}
-				eq = ' + '.join([mk_key(unravel_pix(bm_pix, ps[p][0,j], ps[p][1,j]), i, j) + \
-				 '*b%d'%(unravel_pix(bm_pix, ps[p][0,j], ps[p][1,j])) + '*I%d'%i for p in xrange(len(ps))])
-				eqs[eq] = I_s
-				consts.update(c)
+    def test_build_solver(self):
+        fluxval = np.array([2.0])
+        catd = gen_catdata_zensrc(fluxval, sigma=2)
+        bms = bs.BeamCat(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux=fluxval, bvals=np.ones((31, 31)))
+        bms._build_solver()
+        nt.assert_true(isinstance(bms.ls, linsolve.LinProductSolver))
 
-				for p in xrange(len(ps)):
-					sol_dict['b%d'%(unravel_pix(bm_pix, ps[p][0,j], ps[p][1,j]))] = 1.0
+    def test_sol_values(self):
+        fluxval = np.array([2.0])
+        catd = gen_catdata_zensrc(fluxval, sigma=2)
+        bms = bs.BeamCat(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux=fluxval, bvals=np.zeros((31, 31)))
+        sol = bms.solve()
+        nt.assert_true(sol[1]['b{}'.format(bms.unravel_pix(31, (15, 15)))], 1.0)
 
-		eqs_noise = {k:v for k,v in eqs.items()}
-		ls = linsolve.LinProductSolver(eqs_noise, sol0=sol_dict, **consts)
-		sol0 = ls.solve_iteratively(verbose=True)
+    def test_eval_sol(self):
+        sol = ({'chisq': 0.0, 'conv_crit': 0.0, 'iter': 1}, {'b1': 1, 'I0':2})
+        fluxval = np.array([2.0])
+        catd = gen_catdata_zensrc(fluxval, sigma=2)
+        bms = bs.BeamCat(cat=catd, bm_pix=31)
+        fluxval, obsbeam = bms.eval_sol(sol)
+        ansbeam = np.zeros((31, 31))
+        ansbeam.flat[1] = 1
+        np.testing.assert_equal(obsbeam, ansbeam)
+        np.testing.assert_almost_equal(fluxval, np.array([[1], [2.0]]))
+        sol0 = {'b%d'%i:1 for i in range(31**2)}
+        sol0['I0'] = 2 
+        sol = ({'chisq': 0.0, 'conv_crit': 0.0, 'iter': 1}, sol0)
+        fluxval, obsbeam = bms.eval_sol(sol)
+        ansbeam = np.ones((31, 31))
+        np.testing.assert_almost_equal(obsbeam, ansbeam)
+        np.testing.assert_almost_equal(fluxval, np.array([[1], [2.0]]))
 
-		for key in sol0[1].keys():
-			if key[0] == 'b':
-		   		px = int(key.strip('b'))
-		   		interp2d[px] = sol0[1].get(key)
+    def test_solve_src(self):    
+        fluxval = np.array([2.0])
+        catd = gen_catdata_zensrc(fluxval, sigma=2)
+        bms = bs.BeamCat(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux=fluxval, bvals=np.zeros((31, 31)))
+        sol = bms.solve()
+        outflux, obsbeam = bms.eval_sol(sol)
+        ansbeam = np.zeros((31, 31))
+        ansbeam[15, 15] = 1
+        np.testing.assert_almost_equal(obsbeam, ansbeam)
+        np.testing.assert_almost_equal(outflux, np.array([[1], [2.0]])) 
 
-		interp2d = interp2d.reshape((bm_pix, bm_pix))
-		catd.azalt_array = np.zeros((2, _sh[0], _sh[1]))
-		catd.azalt_array[0, :, :] = azs
-		catd.azalt_array[1, :, :] = alts
-		catd.Nsrcs = _sh[0]
-		catd.Nfits = _sh[1]
-		catd.data_array = newdata
-		np.testing.assert_almost_equal(catd.data_array, newdata)
-		np.testing.assert_almost_equal(catd.azalt_array[0, :, :], azs)
-		np.testing.assert_almost_equal(catd.azalt_array[1, :, :], alts)
-		bmc = bs.BeamCat(cat=catd, bm_pix=31)
-		bmc.add_eqs(catalog_flux=fluxvals, bvals=np.ones((bm_pix, bm_pix)), constrain=True)
-		sol = bmc.solve()
-		fluxvals, obsbeam = bmc.eval_sol(sol)
-		np.testing.assert_allclose(obsbeam, interp2d)
-		cleanbeam = bmc.remove_degen(bmc.ls.ls, obsbeam)
-""
 class Test_BeamOnlyCross():
-    def test_solve(self):
-        consts = OrderedDict()
-        eqs = OrderedDict()
-        catd = cd.catData()
-        catd.gen_catalog(fitsfiles_xx, ras, decs)
-        bm_pix = 31
-        bm_true = np.zeros((bm_pix, bm_pix), dtype=float)
-        bmx, bmy = np.indices(bm_true.shape)
-        mu = 15.; sigma=3.
-        bm_true = np.exp(-((bmx-mu)**2 + (bmy-mu)**2)/ (2 * sigma**2))
-        tx0, ty0, tz0 = get_top(bm_pix, center=(15, 15), res=0.5)
-        tx00, ty00, tz00 = tx0.flatten(), ty0.flatten(), tz0.flatten()
-        indices = np.arange(bm_pix**2)
-        azs, alts = aipy.coord.top2azalt([np.array(tx0[:, :]), np.array(ty0[:, :]), np.array(tz0[:, :])])
-        #azs, alts = aipy.coord.top2azalt([np.array(tx0[15:16,15:16]), np.array(ty0[15:16, 15:16]), np.array(tz0[15:16, 15:16])])
-        azs = np.rad2deg(azs); alts = np.rad2deg(alts)
-        _sh = azs.shape
-        fluxvals = np.random.random(_sh[0]) + 10
-        newdata = np.zeros((2, _sh[0], _sh[1]))	
-        for i in range(_sh[0]):
-            tx, ty, tz = aipy.coord.azalt2top([np.deg2rad(azs[i, :]), np.deg2rad(alts[i, :])])
-            tx_px = tx * 0.5 * bm_pix + 0.5 * bm_pix
-            tx_px0 = np.floor(tx_px).astype(np.int)
-            tx_px1 = np.clip(tx_px0 + 1, 0, bm_pix - 1)
-            fx = tx_px - tx_px0
-            ty_px = ty * 0.5 * bm_pix + 0.5 * bm_pix
-            ty_px0 = np.floor(ty_px).astype(np.int)
-            ty_px1 = np.clip(ty_px0 + 1, 0, bm_pix - 1)
-            fy = ty_px - ty_px0
-            x0y0 = np.array([tx_px0, ty_px0], dtype=np.int)
-            x0y1 = np.array([tx_px0, ty_px1], dtype=np.int)
-            x1y0 = np.array([tx_px1, ty_px0], dtype=np.int)
-            x1y1 = np.array([tx_px1, ty_px1], dtype=np.int)
-
-            w0 = (1 - fx) * (1 - fy)
-            w1 = fx * (1 - fy)
-            w2 = (1 - fx) * fy
-            w3 = fx * fy
-
-            ps = [x0y0, x0y1, x1y0, x1y1]
-            ws = [w0, w1, w2, w3]
-
-        
-            flip = -1
-            theta = np.pi / 2
-            rx0y0 = np.dot(rotate_mat(theta), np.array([tx_px0, ty_px0], dtype=np.int))
-            rx0y1 = np.dot(rotate_mat(theta), np.array([tx_px0, ty_px1], dtype=np.int))
-            rx1y0 = np.dot(rotate_mat(theta), np.array([tx_px1, ty_px0], dtype=np.int))
-            rx1y1 = np.dot(rotate_mat(theta), np.array([tx_px1, ty_px1], dtype=np.int))
-
-            #rx0y0 = rotate(theta, np.array([x0y0[0,:], x0y0[1,:]])).astype(int)
-            #rx0y1 = rotate(theta, np.array([x0y1[0,:], x0y1[1,:]])).astype(int)
-            #rx1y0 = rotate(theta, np.array([x1y0[0,:], x1y0[1,:]])).astype(int)
-            #rx1y1 = rotate(theta, np.array([x1y1[0,:], x1y1[1,:]])).astype(int)
-
-            rx0y0[0] = flip * rx0y0[0]
-            rx0y1[0] = flip * rx0y1[0]
-            rx1y0[0] = flip * rx1y0[0]
-            rx1y1[0] = flip * rx1y1[0]
-
-            rtx_px0 = rx0y0[0, :].astype(int)
-            rty_px0 = rx0y0[1, :].astype(int)
-            rtx_px1 = rx1y1[0, :].astype(int)
-            rty_px1 = rx1y1[1, :].astype(int)
-
-            rps = [rx0y0, rx0y1, rx1y0, rx1y1]
-
-            for j in range(_sh[1]):
-                A_s = (bm_true[tx_px0[j],ty_px0[j]] * w0[j] + bm_true[tx_px0[j],ty_px1[j]] * w1[j] + bm_true[tx_px1[j],ty_px0[j]] * w2[j] + bm_true[tx_px1[j], ty_px1[j]] * w3[j])
-                I_s = fluxvals[i] * A_s
-                newdata[0, i, j] = I_s
-                c = {mk_key(unravel_pix(bm_pix, ps[p][0,j], ps[p][1,j]), i, j): ws[p][j] for p in xrange(len(ps))}
-                eq = ' + '.join([mk_key(unravel_pix(bm_pix, ps[p][0,j], ps[p][1,j]), i, j) + \
-                    '*b%d'%(unravel_pix(bm_pix, ps[p][0,j], ps[p][1,j])) for p in xrange(len(ps))])
-                eqs[eq] = I_s / fluxvals[i]
-                consts.update(c)
-                
-                A_s = (bm_true[rtx_px0[j],rty_px0[j]] * w0[j] + bm_true[rtx_px0[j],rty_px1[j]] * w1[j] + bm_true[rtx_px1[j],rty_px0[j]] * w2[j] + bm_true[rtx_px1[j], rty_px1[j]] * w3[j])
-                I_s = fluxvals[i] * A_s
-                newdata[1, i, j] = I_s
-                c = {mk_key(unravel_pix(bm_pix, rps[p][0,j], rps[p][1,j]), i, j): ws[p][j] for p in xrange(len(ps))}
-                eq = ' + '.join([mk_key(unravel_pix(bm_pix, rps[p][0,j], rps[p][1,j]), i, j) + \
-                    '*b%d'%(unravel_pix(bm_pix, rps[p][0,j], rps[p][1,j])) for p in xrange(len(ps))])
-                eqs[eq] = I_s / fluxvals[i]
-                consts.update(c)
-
-        eqs_noise = {k:v for k,v in eqs.items()}
-        ls = linsolve.LinearSolver(eqs_noise, **consts)
-        sol0 = ls.solve(verbose=True)
-        interp2d = np.zeros((bm_pix**2))
-        for key in sol0.keys():
-            px = int(key.strip('b'))
-            interp2d[px] = sol0.get(key)
-
-        # testing beamonlycross solver
-        catd.azalt_array = np.zeros((2, _sh[0], _sh[1]))
-        catd.azalt_array[0, :, :] = azs
-        catd.azalt_array[1, :, :] = alts
-        catd.Nsrcs = _sh[0]
-        catd.Nfits = _sh[1]
+    def test_solver(self):
+        fluxval = np.array([2.0])
+        catd = gen_catdata_zensrc(fluxval, sigma=2)
+        newdata = np.zeros((2, 1, 1))
+        newdata[:, :, :] = catd.data_array[0, :, :]
         catd.data_array = newdata
-        np.testing.assert_almost_equal(catd.data_array, newdata)
-        np.testing.assert_almost_equal(catd.azalt_array[0, :, :], azs)
-        np.testing.assert_almost_equal(catd.azalt_array[1, :, :], alts)
+        catd.Npols = 2
         bms = bs.BeamOnlyCross(cat=catd, bm_pix=31)
-        bms.add_eqs(catalog_flux_xx=fluxvals, catalog_flux_yy=fluxvals, theta_yy=[np.pi/2], flip_yy=[-1])
+        bms.add_eqs(catalog_flux_xx=fluxval, catalog_flux_yy=fluxval, theta_xx=[0], theta_yy=[np.pi/2])
+        sol = bms.solve()
+        nt.assert_true(isinstance(bms.ls, linsolve.LinearSolver))
+
+    def test_solve_onesrc(self):
+        fluxval = np.array([2.0])
+        catd = gen_catdata_zensrc(fluxval, sigma=2)
+        newdata = np.zeros((2, 1, 1))
+        newdata[:, :, :] = catd.data_array[0, :, :]
+        catd.data_array = newdata
+        catd.Npols = 2
+        bms = bs.BeamOnlyCross(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux_xx=fluxval, catalog_flux_yy=fluxval, theta_xx=[0], theta_yy=[np.pi/2])
         sol = bms.solve()
         obsbeam = bms.eval_sol(sol)
-        diff = obsbeam - interp2d.reshape((bm_pix, bm_pix))
-        np.testing.assert_allclose(diff, np.zeros((bm_pix, bm_pix)), rtol=1e-04, atol=1e-04)
-        np.testing.assert_allclose(obsbeam, interp2d.reshape((bm_pix, bm_pix)), rtol=1e-04, atol=1e-04)
-        cleanbeam = bms.remove_degen(bms.ls, obsbeam)
-        #np.testing.assert_allclose(cleanbeam, bm_true, rtol=1e-03, atol=1e-03)
+        ansbeam = np.zeros((31, 31))
+        ansbeam[15, 15] = 1
+        np.testing.assert_almost_equal(obsbeam, ansbeam)
 
-"""
-class Test_BeamCatCross():
-    def test_solve(self):
-        consts = OrderedDict()
-        eqs = OrderedDict()
-        sol_dict = OrderedDict()
-        catd = cd.catData()
-        catd.gen_polcatalog(fitsfiles_xx, fitsfiles_yy, ras, decs)
-        bm_pix = 31
-        interp2d = np.zeros((bm_pix**2))
-        bm_true = np.zeros((bm_pix, bm_pix), dtype=float)
-        bmx, bmy = np.indices(bm_true.shape)
-        mu = 15.; sigma=3.
-        bm_true = np.exp(-((bmx-mu)**2 + (bmy-mu)**2)/ (2 * sigma**2))
-        tx0, ty0, tz0 = get_top(bm_pix, center=(15, 15), res=0.5)
-        tx00, ty00, tz00 = tx0.flatten(), ty0.flatten(), tz0.flatten()
-        indices = np.arange(bm_pix**2)
-        #azs, alts = aipy.coord.top2azalt([np.array(tx0[:, :]), np.array(ty0[:, :]), np.array(tz0[:, :])])
-        azs, alts = aipy.coord.top2azalt([np.array(tx0[15:16,15:16]), np.array(ty0[15:16, 15:16]), np.array(tz0[15:16, 15:16])])
-        azs = np.rad2deg(azs); alts = np.rad2deg(alts)
-        _sh = azs.shape
-        fluxvals = np.random.random(_sh[0]) + 10
-        newdata = np.zeros((2, _sh[0], _sh[1]))
-        for i in range(_sh[0]):
-            tx, ty, tz = aipy.coord.azalt2top([np.deg2rad(azs[i,:]), np.deg2rad(alts[i,:])])
-            tx_px = tx * 0.5*bm_pix + 0.5*bm_pix
-            tx_px0 = np.floor(tx_px).astype(np.int)
-            tx_px1 = np.clip(tx_px0+1,0,bm_pix-1)#tx_px0 + 1
-            fx = tx_px - tx_px0
-            ty_px = ty * 0.5*bm_pix + 0.5*bm_pix
-            ty_px0 = np.floor(ty_px).astype(np.int)
-            ty_px1 = np.clip(ty_px0+1,0,bm_pix-1)#ty_px0 + 1
-            fy = ty_px - ty_px0
-            x0y0 = np.array([tx_px0, ty_px0], dtype=np.int)
-            x0y1 = np.array([tx_px0, ty_px1], dtype=np.int)
-            x1y0 = np.array([tx_px1, ty_px0], dtype=np.int)
-            x1y1 = np.array([tx_px1, ty_px1], dtype=np.int)
-
-            w0 = (1 - fx) * (1 - fy)
-            w1 = fx * (1 - fy)
-            w2 = (1 - fx) * fy
-            w3 = fx * fy
-
-            ps = [x0y0, x0y1, x1y0, x1y1]
-            ws = [w0, w1, w2, w3]
-
-            flip = 1
-            theta = flip * np.pi / 2
-            rx0y0 = rotate(theta, np.array([x0y0[0,:], x0y0[1,:]])).astype(int)
-            rx0y1 = rotate(theta, np.array([x0y1[0,:], x0y1[1,:]])).astype(int)
-            rx1y0 = rotate(theta, np.array([x1y0[0,:], x1y0[1,:]])).astype(int)
-            rx1y1 = rotate(theta, np.array([x1y1[0,:], x1y1[1,:]])).astype(int)
-
-            rtx_px0 = rx0y0[0, :]
-            rty_px0 = rx0y0[1, :]
-            rtx_px1 = rx1y1[0, :]
-            rty_px1 = rx1y1[1, :]
-
-            rps = [rx0y0, rx0y1, rx1y0, rx1y1]
-
-            sol_dict['I%d'%i] = fluxvals[i]
-            for j in range(_sh[1]):
-                A_s = (bm_true[tx_px0[j], ty_px0[j]] * w0[j] + bm_true[tx_px0[j], ty_px1[j]] * w1[j] \
-                  + bm_true[tx_px1[j], ty_px0[j]] * w2[j] + bm_true[tx_px1[j], ty_px1[j]] * w3[j])
-                I_s = fluxvals[i] * A_s
-                newdata[0, i, j] = I_s
-                c = {mk_key(unravel_pix(bm_pix, ps[p][0,j], ps[p][1,j]), i, j): ws[p][j] for p in xrange(len(ps))}
-                eq = ' + '.join([mk_key(unravel_pix(bm_pix, ps[p][0,j], ps[p][1,j]), i, j) + \
-                 '*b%d'%(unravel_pix(bm_pix, ps[p][0,j], ps[p][1,j])) + '*I%d'%i for p in xrange(len(ps))])
-                eqs[eq] = I_s
-                consts.update(c)
-
-                A_s = (bm_true[rtx_px0[j], rty_px0[j]] * w0[j] + bm_true[tx_px0[j], rty_px1[j]] * w1[j] \
-                  + bm_true[tx_px1[j], rty_px0[j]] * w2[j] + bm_true[tx_px1[j], rty_px1[j]] * w3[j])
-                I_s = fluxvals[i] * A_s
-                newdata[1, i, j] = I_s
-                c = {mk_key(unravel_pix(bm_pix, rps[p][0,j], rps[p][1,j]), i, j): ws[p][j] for p in xrange(len(ps))}
-                eq = ' + '.join([mk_key(unravel_pix(bm_pix, rps[p][0,j], rps[p][1,j]), i, j) + \
-                 '*b%d'%(unravel_pix(bm_pix, rps[p][0,j], rps[p][1,j])) + '*I%d'%i for p in xrange(len(ps))])
-                eqs[eq] = I_s
-                consts.update(c)
-
-                for p in xrange(len(ps)):
-                    sol_dict['b%d'%(unravel_pix(bm_pix, ps[p][0,j], ps[p][1,j]))] = 1.0
-                    sol_dict['b%d'%(unravel_pix(bm_pix, rps[p][0,j], rps[p][1,j]))] = 1.0
-
-        eqs_noise = {k:v for k,v in eqs.items()}
-        ls = linsolve.LinProductSolver(eqs_noise, sol0=sol_dict, **consts)
-        sol0 = ls.solve_iteratively(verbose=True)
-
-        for key in sol0[1].keys():
-            if key[0] == 'b':
-                px = int(key.strip('b'))
-                interp2d[px] = sol0[1].get(key)
-
-        interp2d = interp2d.reshape((bm_pix, bm_pix))
-        catd.azalt_array = np.zeros((2, _sh[0], _sh[1]))
-        catd.azalt_array[0, :, :] = azs
-        catd.azalt_array[1, :, :] = alts
-        catd.Nsrcs = _sh[0]
-        catd.Nfits = _sh[1]
+    def test_solve_grid(self):
+        fluxvals = np.random.random(50) + 10
+        catd= gen_catdata_grid(50, fluxvals, sigma_x=0.2, sigma_y=0.2)
+        newdata = np.zeros((2, 50, 50))
+        newdata[:, :, :] = catd.data_array[0, :, :]
         catd.data_array = newdata
-        np.testing.assert_almost_equal(catd.data_array, newdata)
-        np.testing.assert_almost_equal(catd.azalt_array[0, :, :], azs)
-        np.testing.assert_almost_equal(catd.azalt_array[1, :, :], alts)
-        bmc = bs.BeamCatCross(cat=catd, bm_pix=31)
-        bmc.add_eqs(catalog_flux_xx=fluxvals, catalog_flux_yy=fluxvals, bvals=np.ones((bm_pix, bm_pix)), flip_yy=[-1])
-        sol = bmc.solve()
-        fluxvals, obsbeam = bmc.eval_sol(sol)
-        np.testing.assert_allclose(obsbeam, interp2d)
-        cleanbeam = bmc.remove_degen(bmc.ls.ls, obsbeam)
-"""
+        catd.Npols = 2
+        bms = bs.BeamOnlyCross(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux_xx=fluxvals, catalog_flux_yy=fluxvals, theta_xx=[0], theta_yy=[np.pi/2], flip_yy=[-1])
+        sol = bms.solve()
+        obsbeam = bms.eval_sol(sol)
+        gaussbeam = bt.get_gaussbeam(3, mu_x=15, mu_y=15, size=31)
+        np.testing.assert_allclose(gaussbeam, obsbeam, atol=1e-01)
