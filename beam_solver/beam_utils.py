@@ -4,7 +4,7 @@ from pyuvdata import UVBeam
 
 pol2ind = {'xx': 0, 'yy': 1}
 
-def get_gaussbeam(mu, sigma, size=31):
+def get_gaussbeam(sigma_x, sigma_y=None, mu_x=0, mu_y=0, size=31):
     """
     Generate the 2D gaussian beam using
 
@@ -22,12 +22,50 @@ def get_gaussbeam(mu, sigma, size=31):
         Dimension of the output array. Default output 31, threrefore,
 	the shape of the output beam will be (31, 31) by default.
     """
-    
+    mu_x = float(mu_x)
+    mu_y = float(mu_y)
+    sigma_x = float(sigma_x)
+    if sigma_y is None: sigma_y = sigma_x
+    sigma_y = float(sigma_y)
     beam_array = np.zeros((size, size))
     bmx, bmy = np.indices(beam_array.shape)
-    beam_array = np.exp(-((bmx - float(mu)) ** 2 + (bmy - float(mu)) ** 2) / (2 * float(sigma) ** 2))
-
+    beam_array = np.exp(-((bmx - mu_x)**2 / (2 * sigma_x**2) + (bmy - mu_y)**2 / (2 * sigma_y**2)))
     return beam_array
+
+def recenter(a, c):
+    """Slide the (0,0) point of matrix a to a new location tuple c.  This is
+    useful for making an image centered on your screen after performing an
+    inverse fft of uv data."""
+    s = a.shape
+    c = (c[0] % s[0], c[1] % s[1])
+    if np.ma.isMA(a):
+        a1 = np.ma.concatenate([a[c[0]:], a[:c[0]]], axis=0)
+        a2 = np.ma.concatenate([a1[:,c[1]:], a1[:,:c[1]]], axis=1)
+    else:
+        a1 = np.concatenate([a[c[0]:], a[:c[0]]], axis=0)
+        a2 = np.concatenate([a1[:,c[1]:], a1[:,:c[1]]], axis=1)
+    return a2
+
+def get_LM(dim, center=(0,0), res=1):
+        """Get the (l,m) image coordinates for an inverted UV matrix."""
+        M,L = np.indices((dim, dim))
+        L,M = np.where(L > dim/2, dim-L, -L), np.where(M > dim/2, M-dim, M)
+        L,M = L.astype(np.float32)/dim/res, M.astype(np.float32)/dim/res
+        mask = np.where(L**2 + M**2 >= 1, 1, 0)
+        L,M = np.ma.array(L, mask=mask), np.ma.array(M, mask=mask)
+        return recenter(L, center), recenter(M, center)
+
+def get_top(dim, center=(0,0), res=1):
+    """Return the topocentric coordinates of each pixel in the image."""
+    x,y = get_LM(dim, center, res)
+    z = np.sqrt(1 - x**2 - y**2)
+    return x,y,z
+
+def get_src_tracks(coord, flux, sigma_x, sigma_y=None):
+    if sigma_y is None: sigma_y = sigma_x
+    x, y, z = coord
+    A_s = np.exp(-(x**2 / (2 * sigma_x**2) + y**2 / (2 * sigma_y**2)))
+    return A_s * flux
 
 def get_fitsbeam(filename, freq, pol='xx', nside=32):
     """
