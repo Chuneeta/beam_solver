@@ -27,7 +27,7 @@ Clone the repo using
 `python setup.py install`
 
 ## Package Details and Usage
-There are currently five primary modules which drive HERA quality metrics.
+Modules driving the beam_solver package:
 
 ### imaging
 A module to generate images from a miriad file using CASA. It includes modules that convert
