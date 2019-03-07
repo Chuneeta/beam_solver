@@ -10,6 +10,8 @@ import h5py
 import healpy
 import copy
 
+pol2ind = {'xx':0, 'yy':1}
+
 class catData(object):
     """
     Object for stroing different catalog of celestial sources
