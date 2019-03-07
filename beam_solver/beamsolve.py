@@ -177,7 +177,7 @@ class BeamFunc():
 
         return U, S, V
 
-    def remove_degen(self, ls, obsbeam, threshold=5e-6):
+    def remove_degen(self, ls, obsbeam, threshold=5e-6, key='b'):
         """
         Remove degeneracies using single value decomposition. It removes all eigenvalue modes
         above the specified threshold.
@@ -187,6 +187,9 @@ class BeamFunc():
             2-dimensional array containing the beam values.
         threshold : float
             Threshold value after which all the eigenvalue modes will be discarded.
+        key : str
+            Keyword or naming convention used to denote the beam pixels in the solver object.
+             Default is 'b'.
         """
         A = self.get_A(ls)
         U, S, V = self.svd(ls, A)
@@ -199,14 +202,14 @@ class BeamFunc():
         print ('Removing all eigen modes above {}'.format(cutoff_mode))
 
         for i in xrange(cutoff_mode, len(S)):
-            emode = np.array([U[ls.prm_order['b%d' % px], i] if ls.prm_order.has_key('b%d'%px) else 0 for px in xrange(self.bm_pix**2)])
+            emode = np.array([U[ls.prm_order['%s%d' % (key, px)], i] if ls.prm_order.has_key('%s%d'% (key, px)) else 0 for px in xrange(self.bm_pix**2)])
             emode.shape = (self.bm_pix, self.bm_pix)
             obsbeam -= np.sum(obsbeam * emode) * emode.conj()
 
         return obsbeam
 
 class BeamOnly(BeamFunc):
-    def __init__(self, cat=None, bm_pix=60):
+    def __init__(self, cat, bm_pix=60):
         """
         Object that stores the flux catalog containing the flux values for one
         polarization and solves for the primary beam only.
@@ -272,7 +275,7 @@ class BeamOnly(BeamFunc):
         return obs_beam
     
 class BeamCat(BeamOnly):
-    def __init__(self, cat=None, bm_pix=60):
+    def __init__(self, cat, bm_pix=60):
         """
         Object that stores the flux catalog containing the flux values for one
         polarization and solves for both the true flux values of the sources and
@@ -390,7 +393,7 @@ class BeamCat(BeamOnly):
         return fluxvals, obs_beam
 
 class BeamOnlyCross(BeamOnly):
-    def __init__(self, cat=None, bm_pix=60):
+    def __init__(self, cat, bm_pix=60):
         """
         Object that stores the flux catalog containing the flux values for xx and yy
         polarization and solves for the primary beam only using both polarizations.
