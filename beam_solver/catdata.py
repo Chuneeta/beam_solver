@@ -2,6 +2,8 @@ from collections import OrderedDict
 from beam_solver import extract as et
 from beam_solver import coord_utils as ct
 from beam_solver import fits_utils as ft
+import scipy
+from scipy import interpolate
 import os, sys
 import numpy as np
 import h5py
@@ -20,7 +22,7 @@ class catData(object):
         self.err_array = None
         self.Nfits = None
         self.Nsrcs  = None
-        self.Npols = None
+        self.pols = None
 
     def get_unique(self, ras, decs, tol=5):
         """
@@ -99,9 +101,9 @@ class catData(object):
         Parameters
         ---------
         dec : float
-            Declination in radians.
+            Declination in degrees.
         ha : float 
-            Hour angle in radians.       
+            Hour angle in degrees.       
         """
         az, alt = ct.hadec2azalt(dec * np.pi/180., ha)
         return az, alt
@@ -229,6 +231,48 @@ class catData(object):
         if return_data:
             return srcdict
 
+    def _get_resolution(self, npix):
+        grid_ha = np.linspace(0, np.pi, npix)
+        return grid_ha[1] - grid_ha[0]
+
+    def _get_npoints(self, npix):
+        dr = self._get_resolution(npix)
+        d_ha = self.ha_array[0, 0] - self.ha_array[0, -1]
+        dn_ha = np.abs(d_ha) / dr
+        return int(dn_ha) + 1
+
+    def _interpolate_data(self, data, (azs, alts), (az0, alt0)):
+        # linear interpolation
+        dist = np.sqrt((azs - az0)**2 + (alts - alt0)**2)
+        inds = np.argsort(dist)
+        if dist[inds[0]] == 0:
+            interp_data =  data[inds[0]]
+        else:
+            w1 = dist[inds[0]]**(-2)
+            w2 = dist[inds[1]]**(-2)
+            wgts = w1 + w2
+            interp_data = (data[inds[0]] * w1 + data[inds[1]] * w2) / wgts
+        return interp_data
+  
+    def interpolate_catalog(self, npix, polnum=0):
+        data = self.data_array[polnum]
+        npoints = self._get_npoints(npix)
+        self.data_array = np.zeros((len(self.pols), self.Nsrcs, npoints))
+        azalt_array = np.zeros((2, self.Nsrcs, npoints))
+        ha_array = np.zeros((self.Nsrcs, npoints))
+        for ii in xrange(self.Nsrcs):
+            azs = self.azalt_array[0, ii, :]
+            alts = self.azalt_array[1, ii, :]
+            ha_array[ii, :] = np.linspace(np.min(self.ha_array[ii, :]), np.max(self.ha_array[ii, :]), npoints)
+            interp_azs, interp_alts = self._get_azalt(self.pos_array[ii][1], ha_array[ii, :])
+            azalt_array[0, ii, :] = interp_azs
+            azalt_array[1, ii, :] = interp_alts
+            for jj, az in enumerate(interp_azs):
+                self.data_array[polnum, ii, jj] = self._interpolate_data(data[ii, :], (azs, alts), (az, interp_alts[jj]))
+        self.azalt_array = azalt_array
+        self.ha_array = ha_array
+        self.Nfits = npoints
+
     def write_hdf5(self, filename, clobber=False):
         """
         Writes catData object to HDF5 file (saves it on disk)
@@ -272,7 +316,7 @@ class catData(object):
             mgp = f['Metadata']
             self.Nfits = mgp['Nfits'].value
             self.Nsrcs = mgp['Nsrcs'].value
-            self.Npols = mgp['pols'].value
+            self.pols = mgp['pols'].value
             self.ha_array = mgp['ha_array'].value
             self.err_array = mgp['err_array'].value
             self.pos_array = mgp['pos_array'].value
