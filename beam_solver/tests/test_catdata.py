@@ -6,6 +6,7 @@ import nose.tools as nt
 from beam_solver import catdata as cd
 from beam_solver import beam_utils as bt
 from beam_solver import fits_utils as ft
+import copy
 
 beamfits = os.path.join(DATA_PATH, 'HERA_NF_dipole_power.beamfits')
 fitsfile = os.path.join(DATA_PATH, '2458115.23736.test.xx.fits')
@@ -14,6 +15,16 @@ h5file = os.path.join(DATA_PATH, 'srcd.h5')
 
 ras = [74.26237654, 41.91116875, 22.47460079, 9.8393989, 356.25426296]
 decs = [-52.0209015, -43.2292595, -30.27372862, -17.40763737, -0.3692835]
+
+def create_catdata(azalt, data, ha, nsrcs, npoints, pols=['xx']):
+    catd = cd.catData()
+    catd.azalt_array = azalt
+    catd.data_array = data
+    catd.ha_array = ha
+    catd.Nfits = npoints
+    catd.Nsrcs = nsrcs
+    catd.pols = pols
+    return catd
 
 class Test_catData():
     def test_get_unique(self):
@@ -111,6 +122,66 @@ class Test_catData():
         srcdict = catd.gen_catalog(ras, decs, [outfile], return_data=True)
         nt.assert_equal(len(srcdict.keys()), len(ras))
         np.testing.assert_almost_equal(srcdict.keys(), catd.pos_array)
+        
+    def test_get_resolution(self):
+        catd = cd.catData()
+        npoints = catd._get_resolution(60)
+        x = np.linspace(0, np.pi, 60)
+        nt.assert_almost_equal(npoints, x[1] - x[0])
+
+    #def test_get_npoints(self):
+    #    catd = cd.catData()
+    #    npix = 91
+    #    x = np.linspace(0, np.pi, npix)
+    #    azs = np.array([[0, np.pi/2, np.pi],[0, np.pi/2, np.pi]])
+    #    alts = np.array([[0, np.pi/2, np.pi], [0, np.pi/2, np.pi]])
+    #    catd.azalt_array = np.zeros((2, azs.shape[0], azs.shape[1]))
+    #    catd.azalt_array[0, :, :] = azs
+    #    catd.azalt_array[1, :, :] = alts
+    #    npoints = catd._get_npoints(npix)
+    #    nt.assert_almost_equal(npoints, int(np.pi/ (x[1] - x[0])) + 1)
+
+    def test_get_npoints(self):
+        catd = cd.catData()
+        ha = np.array([[np.pi/2, np.pi/4, 1e-5, -np.pi/4, -np.pi/2]])
+        catd.ha_array = ha
+        npix = 31
+        npoints = catd._get_npoints(npix)
+        nt.assert_equal(npoints, npix)
+        ha = np.array([[np.pi/3, np.pi/4, 1e-5, -np.pi/4, -np.pi/3]])
+        catd.ha_array = ha
+        npix = 61
+        npoints = catd._get_npoints(npix)
+        nt.assert_less(npoints, npix)        
+          
+    def test_interpolate_data(self):
+        catd = cd.catData()
+        azs = np.array([0., np.pi/4., np.pi/2., np.pi, 3*np.pi/4])
+        alts = np.array([0., np.pi/4., np.pi/2., np.pi, 3*np.pi/4])
+        data = np.array([0., 0.5, 1., 1.5, 2.])
+        interp_d = catd._interpolate_data(data, (azs, alts), (np.pi, np.pi))
+        nt.assert_almost_equal(interp_d, 1.5)
+        interp_d = catd._interpolate_data(data, (azs, alts), (np.pi/3, np.pi/3))
+        w1 = (np.pi/3 - np.pi/4)**(-2)
+        w2 = (np.pi/3 - np.pi/2)**(-2)
+        answer = (0.5 * w1 + w2) / (w1 + w2)
+        nt.assert_almost_equal(interp_d, answer)
+
+    def test_interpolate_catalog(self):
+        catd = cd.catData()
+        data = np.array([[[0., 0.5, 1., 1.5, 2.]]])
+        ha = np.array([[-np.pi/2, -np.pi/4, 1e-5, np.pi/4, np.pi/2]])
+        azs, alts = catd._get_azalt(-30.43, ha)
+        catd = create_catdata(np.array([azs, alts]), data, ha, 1, len(azs))
+        catd.pos_array = np.array([(30.01, -30.43)])
+        catd_copy = copy.deepcopy(catd)
+        npix = 31
+        catd_copy.interpolate_catalog(npix)
+        nt.assert_almost_equal(np.min(catd.data_array[0, 0, :]), 0.0)
+        nt.assert_almost_equal(np.max(catd.data_array[0, 0, :]), 2.0)
+        nt.assert_almost_equal(catd.data_array[0, 0, 0], catd_copy.data_array[0, 0, 0])
+        nt.assert_almost_equal(catd.azalt_array[0, 0, 0], catd_copy.azalt_array[0, 0, 0])
+        nt.assert_almost_equal(catd.azalt_array[1, 0, 0], catd_copy.azalt_array[1, 0, 0])
 
     def test_write_hdf5(self):
         catd = cd.catData()
