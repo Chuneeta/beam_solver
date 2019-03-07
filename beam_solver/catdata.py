@@ -256,10 +256,10 @@ class catData(object):
             interp_data = (data[inds[0]] * w1 + data[inds[1]] * w2) / wgts
         return interp_data
   
-    def interpolate_catalog(self, npix, polnum=0):
-        data = self.data_array[polnum]
+    def interpolate_catalog(self, npix):
+        data = self.data_array
         npoints = self._get_npoints(npix)
-        self.data_array = np.zeros((len(self.pols), self.Nsrcs, npoints))
+        data_array = np.zeros((len(self.pols), self.Nsrcs, npoints))
         azalt_array = np.zeros((2, self.Nsrcs, npoints))
         ha_array = np.zeros((self.Nsrcs, npoints))
         for ii in xrange(self.Nsrcs):
@@ -270,7 +270,9 @@ class catData(object):
             azalt_array[0, ii, :] = interp_azs
             azalt_array[1, ii, :] = interp_alts
             for jj, az in enumerate(interp_azs):
-                self.data_array[polnum, ii, jj] = self._interpolate_data(data[ii, :], (azs, alts), (az, interp_alts[jj]))
+                for p in xrange(len(self.pols)):
+                    data_array[p, ii, jj] = self._interpolate_data(data[p, ii, :], (azs, alts), (az, interp_alts[jj]))
+        self.data_array = data_array
         self.azalt_array = azalt_array
         self.ha_array = ha_array
         self.Nfits = npoints
