@@ -123,12 +123,6 @@ class Test_catData():
         nt.assert_equal(len(srcdict.keys()), len(ras))
         np.testing.assert_almost_equal(srcdict.keys(), catd.pos_array)
         
-    def test_get_resolution(self):
-        catd = cd.catData()
-        npoints = catd._get_resolution(60)
-        x = np.linspace(0, np.pi, 60)
-        nt.assert_almost_equal(npoints, x[1] - x[0])
-
     def test_get_npoints(self):
         catd = cd.catData()
         npix = 91
@@ -146,7 +140,7 @@ class Test_catData():
         ha = np.array([[np.pi/2, np.pi/4, 1e-5, -np.pi/4, -np.pi/2]])
         catd.ha_array = ha
         npoints = catd._get_npoints(0.01)
-        nt.assert_equal(npoints, int(np.pi/0.01))
+        nt.assert_equal(npoints, int(np.pi/0.01) + 1)
  
     def test_interpolate_data(self):
         catd = cd.catData()
