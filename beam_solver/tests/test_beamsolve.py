@@ -21,7 +21,7 @@ decs = [-52.0209015, -43.2292595, -30.27372862, -17.40763737, -0.3692835]
 
 ft.add_keyword(fitsfile, 'JD', 2458115.23736, outfile, overwrite=True)
 catd = cd.catData()
-catd.gen_catalog([outfile], ras, decs)
+catd.gen_catalog(ras, decs, [outfile])
 
 def create_catdata(azalt, data, nsrcs, npoints):
     catd = cd.catData()
@@ -221,16 +221,9 @@ class Test_BeamOnly():
         eq_keys = bms.eqs.keys()
         nt.assert_equal(len(eq_keys), 1)
 
-    #def test_repeat_add_eqs(self):
-    #    fluxval = np.array([2.0])
-    #    catd = gen_catdata_zensrc(fluxval, sigma=2)
-    #    bms = bs.BeamOnly(cat=catd, bm_pix=31)
-    #    bms.add_eqs(catalog_flux=fluxval)
-    #    nt.assert_raises(AssertionError, bms.add_eqs, catalog_flux=fluxval)
-
     def test_eval_sol(self):
         sol = {'b1': 1}
-        bms = bs.BeamOnly(bm_pix=31)
+        bms = bs.BeamOnly(cat=catd, bm_pix=31)
         output = bms.eval_sol(sol)
         answer = np.zeros((31, 31))
         answer.flat[1] = 1
@@ -296,7 +289,7 @@ class Test_BeamOnly():
 
 class Test_BeamCat():
     def test_mk_eq(self):
-        bms = bs.BeamCat(bm_pix=31)
+        bms = bs.BeamCat(cat=catd, bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
         bms._mk_eq(ps, ws, 1, 1, 0, 0, bvals=np.ones((31, 31)))
         eq_keys = bms.eqs.keys()
@@ -421,3 +414,32 @@ class Test_BeamOnlyCross():
         obsbeam = bms.eval_sol(sol)
         gaussbeam = bt.get_gaussbeam(3, mu_x=15, mu_y=15, size=31)
         np.testing.assert_allclose(gaussbeam, obsbeam, atol=1e-01)
+
+class Test_BeamCatCross():
+    def test_solver(self):
+        fluxval = np.array([2.0])
+        catd = gen_catdata_zensrc(fluxval, sigma=2)
+        newdata = np.zeros((2, 1, 1))
+        newdata[:, :, :] = catd.data_array[0, :, :]
+        catd.data_array = newdata
+        catd.Npols = 2
+        bms = bs.BeamCatCross(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux_xx=fluxval, catalog_flux_yy=fluxval, theta_xx=[0], theta_yy=[np.pi/2], bvals=np.zeros((31, 31)))
+        sol = bms.solve()
+        nt.assert_true(isinstance(bms.ls, linsolve.LinProductSolver))
+
+    def test_solve_onesrc(self):
+        fluxval = np.array([2.0])
+        catd = gen_catdata_zensrc(fluxval, sigma=2)
+        newdata = np.zeros((2, 1, 1))
+        newdata[:, :, :] = catd.data_array[0, :, :]
+        catd.data_array = newdata
+        catd.Npols = 2
+        bms = bs.BeamCatCross(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux_xx=fluxval, catalog_flux_yy=fluxval, theta_xx=[0], theta_yy=[np.pi/2], bvals=np.zeros((31, 31)))
+        sol = bms.solve()
+        fluxvals, obsbeam = bms.eval_sol(sol)
+        ansbeam = np.zeros((31, 31))
+        ansbeam[15, 15] = 1
+        np.testing.assert_almost_equal(obsbeam, ansbeam)
+        np.testing.assert_almost_equal(fluxvals[1, :], np.array([2.0]))
