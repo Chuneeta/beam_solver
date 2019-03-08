@@ -63,7 +63,7 @@ class Imaging(object):
             If True, deletes the casa script used to execute the CASA clean task.
             Default is True.
         """
-        ct.imaging(self.ms, imagename, antenna=antenna, cellsize=cellsize, npix=npix, niter=niter, threshold=threshold, weighting=weighting, start=start, stop=stop, uvlength=uvlength, delete=del_script)
+        ct.imaging(self.ms, imagename, antenna=antenna, cellsize=cellsize, npix=npix, niter=niter, threshold=threshold, weighting=weighting, start=start, stop=stop, uvlength=uvlength, script=script, delete=del_script)
             
     def remove_image(self, imagename, del_img=False):
         """
@@ -81,7 +81,6 @@ class Imaging(object):
         os.system('rm -r {}.psf'.format(imagename))
         os.system('rm -r {}.residual'.format(imagename))
         if del_img:
-            print 'Yes'
             os.system('rm -r {}.image'.format(imagename))
 
     def to_fits(self, imagename, fitsname=None, script='to_fits', del_script=True, overwrite=False):
