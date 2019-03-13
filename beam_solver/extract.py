@@ -51,7 +51,7 @@ def get_peakflux(fitsfile, ra, dec, radius=None, negative=False):
                 peakval = minval
         std = np.nanstd(imdata_select)
         rms = np.sqrt(np.nanmean(imdata[~select])**2) # calculated rms outside the selected region
-        peak_err = rms / np.sqrt(bm_npx / 2.0)
+        peak_err = std / bm_npx # std/sqrt(N)
         flux, err = peakval, peak_err
     else:
         warnings.warn('WARNING: Right ascension or declination outside image field, therefore values are set to nan', Warning)
