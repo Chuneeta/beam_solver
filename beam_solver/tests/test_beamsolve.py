@@ -70,37 +70,37 @@ def gen_catdata_grid(npix, fluxvals, sigma_x, sigma_y=None):
     catd = create_catdata(np.array([azs, alts]), data_arr, npix, npix)
     return catd
 
-class Test_BeamFunc():
+class Test_BeamOnly():
     def test_init(self):
         catd = cd.catData()
-        bms = bs.BeamFunc(catd)
+        bms = bs.BeamOnly(catd)
         nt.assert_equal(bms.bm_pix, 60)
         nt.assert_equal(bms.cat, catd)
-        bms = bs.BeamFunc(catd, 30)
+        bms = bs.BeamOnly(catd, 30)
         nt.assert_equal(bms.bm_pix, 30)
         nt.assert_equal(bms.cat, catd)
 
     def test_mk_key(self):
-        bms = bs.BeamFunc()
+        bms = bs.BeamOnly()
         key = bms._mk_key(0, 0, 0)
         nt.assert_equal(key, 'w0_s0_t0')
         key = bms._mk_key(0, 1, 4)
         nt.assert_equal(key, 'w0_s1_t4')
        
     def test_unravel_pix(self):
-        bms = bs.BeamFunc()
+        bms = bs.BeamOnly()
         ind = bms.unravel_pix(60, (0, 0))
         nt.assert_equal(ind, 0)
         ind = bms.unravel_pix(60, (0, 5))
         nt.assert_equal(ind, 5)    
-        bms = bs.BeamFunc(catd, bm_pix=30)
+        bms = bs.BeamOnly(catd, bm_pix=30)
         ind = bms.unravel_pix(30, (0, 5))
         nt.assert_equal(ind, 5)
         ind = bms.unravel_pix(30, (2, 5))
         nt.assert_equal(ind, 65)
 
     def test_rotate_mat(self):
-        bms = bs.BeamFunc(bm_pix=31)
+        bms = bs.BeamOnly(bm_pix=31)
         theta = 0
         mat0 = np.array([[np.cos(theta), -1 * np.sin(theta)], [np.sin(theta), np.cos(theta)]])
         mat = bms.rotate_mat(theta)
@@ -119,7 +119,7 @@ class Test_BeamFunc():
         np.testing.assert_almost_equal(mat, mat0)
 
     def test_get_weights(self):
-        bms = bs.BeamFunc(bm_pix=31)
+        bms = bs.BeamOnly(bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
         nt.assert_equal(len(ps), 4)
         nt.assert_equal(len(ws), 4)
@@ -128,27 +128,27 @@ class Test_BeamFunc():
         np.testing.assert_almost_equal(ws, [np.array([1.0]), np.array([0.]), np.array([0.]), np.array([0.])])
 
     def test_rotate_ps(self):
-        bms = bs.BeamFunc(bm_pix=31)
+        bms = bs.BeamOnly(bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 2*np.pi, 1)
         np.testing.assert_equal(ps, [np.array([[15], [15]]), np.array([[15], [16]]), np.array([[16], [15]]), np.array([[16], [16]])])
-        bms = bs.BeamFunc(catd, 31)
+        bms = bs.BeamOnly(catd, 31)
         ps, ws = bms.get_weights(np.array([[np.pi/4], [np.pi/4]]), np.pi/2, 1)
         ps_270, ws_270 = bms.get_weights(np.array([[np.pi/4], [np.pi/4]]), -3 * np.pi/2, 1)
         np.testing.assert_almost_equal(ps, ps_270)
         np.testing.assert_almost_equal(ws, ws_270)
 
     def test_flip_ps(self):
-        bms = bs.BeamFunc(bm_pix=31)
+        bms = bs.BeamOnly(bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, -1)
         np.testing.assert_equal(ps, [np.array([[15], [15]]), np.array([[15], [16]]), np.array([[16], [15]]), np.array([[16], [16]])])            
-        bms = bs.BeamFunc(bm_pix=31)
+        bms = bs.BeamOnly(bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/4], [np.pi/4]]), 0, 1)
         ps_f, ws_f = bms.get_weights(np.array([[np.pi/4], [np.pi/4]]), 0, -1)
         for i in range(len(ps)):
             nt.assert_almost_equal(ps_f[i][0], ps[i][0] - 15)
 
     def test_mk_eq(self):
-        bms = bs.BeamFunc(bm_pix=31)
+        bms = bs.BeamOnly(bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
         bms._mk_eq(ps, ws, 1, 1, 0, 0)
         eq_keys = bms.eqs.keys()
@@ -162,14 +162,14 @@ class Test_BeamFunc():
         nt.assert_equal(eq_keys[0], eq0)
     
     def test_eqs(self):
-        bms = bs.BeamFunc(catd, 31)
+        bms = bs.BeamOnly(catd, 31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
         bms._mk_eq(ps, ws, 1, 1, 0, 0)
         eq_keys = bms.eqs.keys()
         nt.assert_almost_equal(bms.eqs[eq_keys[0]], 1)
 
     def test_consts(self):
-        bms = bs.BeamFunc(bm_pix=31)
+        bms = bs.BeamOnly(bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
         bms._mk_eq(ps, ws, 1, 1, 0, 0)
         cns_keys = bms.consts.keys()
@@ -178,20 +178,20 @@ class Test_BeamFunc():
         nt.assert_almost_equal(bms.consts['w%s_s0_t0'%px0], 1.0)   
  
     def test_calc_catalog_flux(self):
-        bms = bs.BeamFunc(catd, 31)
+        bms = bs.BeamOnly(catd, 31)
         beam = bt.get_fitsbeam(beamfits, 151e6)
         catalog_flux = bms.calc_catalog_flux(beam, 'xx')
         nt.assert_almost_equal(catalog_flux[2], 1.000, 3)
 
     def test_build_solver(self):
-        bms = bs.BeamFunc(bm_pix=31)
+        bms = bs.BeamOnly(bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
         bms._mk_eq(ps, ws, 1, 1, 0, 0)
         bms._build_solver()
         nt.assert_true(isinstance(bms.ls, linsolve.LinearSolver))
 
     def test_get_A(self):
-        bms = bs.BeamFunc(bm_pix=31)
+        bms = bs.BeamOnly(bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
         bms._mk_eq(ps, ws, 1, 1, 0, 0)
         bms._build_solver()
@@ -199,7 +199,7 @@ class Test_BeamFunc():
         np.testing.assert_almost_equal(A, np.array([[[0.], [0.], [0.], [1.]]]))
 
     def test_svd(self):
-        bms = bs.BeamFunc(bm_pix=31)
+        bms = bs.BeamOnly(bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
         bms._mk_eq(ps, ws, 1, 1, 0, 0)
         bms._build_solver()
@@ -212,7 +212,6 @@ class Test_BeamFunc():
     def test_remove_degen(self):
         pass
 
-class Test_BeamOnly():
     def test_add_eqs(self):
         fluxval = np.array([2.0])
         catd = gen_catdata_zensrc(fluxval, sigma=2)
