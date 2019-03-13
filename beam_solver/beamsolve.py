@@ -4,11 +4,11 @@ import aipy
 import time
 from collections import OrderedDict
 
-class BeamFunc():
+class BeamOnly():
     def __init__(self, cat=None, bm_pix=60):
         """
-        Object that stores the flux catalog containing the flux values which will be used
-        to solve for the primary beam
+        Object that stores the flux catalog containing the flux values for one
+        polarization and solves for the primary beam only.
         """
         self.cat = cat
         self.bm_pix = bm_pix
@@ -21,18 +21,14 @@ class BeamFunc():
         """
         Generates key to represent the beam pixel which include the source id,
         timestamp and pixel.
-
         Parameters
         ----------
         pixel : int
             Pixel from the 2D grid beam.
-
         srcid : int
             Source identity.
-
         timeid : int
             Time identity or timestamps.
-
         Returns
         -------
             String corresponding the given parameters.
@@ -87,23 +83,19 @@ class BeamFunc():
         tx_px1 = np.clip(tx_px0 + 1, 0, self.bm_pix - 1)
         ty_px0 = np.floor(ty_px).astype(np.int)
         ty_px1 = np.clip(ty_px0 + 1, 0, self.bm_pix - 1)        
-
         x0y0 = np.array([tx_px0, ty_px0])
         x0y1 = np.array([tx_px0, ty_px1])
         x1y0 = np.array([tx_px1, ty_px0])
         x1y1 = np.array([tx_px1, ty_px1])
-
         # defining the weights
         fx = tx_px - tx_px0
         fy = ty_px - ty_px0
         w0 = (1 - fx) * (1 - fy)
         w1 = fx * (1 - fy)
         w2 = (1 - fx) * fy
-        w3 = fx * fy
-        
+        w3 = fx * fy       
         ps = [x0y0, x0y1, x1y0, x1y1]
-        ws = [w0, w1, w2, w3]
-	    
+        ws = [w0, w1, w2, w3] 
         return ps, ws
 
     def _mk_eq(self, ps, ws, obs_flux, catalog_flux, srcid, timeid, **kwargs):
@@ -208,14 +200,6 @@ class BeamFunc():
 
         return obsbeam
 
-class BeamOnly(BeamFunc):
-    def __init__(self, cat, bm_pix=60):
-        """
-        Object that stores the flux catalog containing the flux values for one
-        polarization and solves for the primary beam only.
-        """
-        BeamFunc.__init__(self, cat, bm_pix)
-	
     def add_eqs(self, catalog_flux, theta=[0], flip=[1], polnum=0, **kwargs):
         """
         Construct a linear system of equations of the form
