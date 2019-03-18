@@ -20,10 +20,10 @@ class catData(object):
         self.azalt_array = None
         self.ha_array = None
         self.pos_array = None
-        self.err_array = None
         self.Nfits = None
         self.Nsrcs  = None
         self.pols = None
+        self.err_array = '0'
 
     def get_unique(self, ras, decs, tol=5):
         """
@@ -128,7 +128,7 @@ class catData(object):
         nfits = len(fitsfiles)
         srcdict = OrderedDict()
         ha_array = np.zeros((nsrcs, nfits))
-        err_array = np.zeros((nsrcs, nfits))
+        #err_array = np.zeros((nsrcs, nfits))
         data_array = np.zeros((nsrcs, nfits))
         azalt_array = np.zeros((2, nsrcs, nfits))
         jds = self._get_jds(fitsfiles)
@@ -140,16 +140,26 @@ class catData(object):
                 lst, ha = self._get_lstha(jds[jj], ra)
                 az, alt = self._get_azalt(decs[ii], ha)
                 ha_array[ii, jj] = ha
-                err_array[ii, jj] = srcstats['error']
+                #err_array[ii, jj] = srcstats['error']
                 data_array[ii, jj] = srcstats['flux']
                 azalt_array[0, ii, jj] = az
                 azalt_array[1, ii, jj] = alt
                 # saving to dictionary
             srcdict[key]['data'] = data_array[ii,  :]
-            srcdict[key]['error'] = err_array[ii, :]
+            #srcdict[key]['error'] = err_array[ii, :]
             srcdict[key]['ha'] = ha_array[ii, :]
             srcdict[key]['azalt'] = azalt_array[:, ii, :]
         return srcdict
+
+    def calc_error(self, res_fitsfiles, pol):
+        self.err_array = np.zeros((len(self.pols), self.Nsrcs, self.Nfits))
+        for ii, pos in enumerate(self.pos_array):
+            for jj, fn in enumerate(res_fitsfiles):
+                resstats = et.get_peakflux(fn, pos[0], pos[1])            
+                if len(self.pols) == 1:
+                    self.err_array[0, ii, jj] = resstats['std']
+                else:
+                    self.err_array[pol2ind(pol), ii, jj] = resstats['std']        
 
     def _srcdict_catdata(self, srcdict):
         """
@@ -169,12 +179,10 @@ class catData(object):
         else:
             _sh0 = _sh[0]; _sh2 = _sh[1]  
         self.data_array = np.zeros((_sh0, _sh1, _sh2)) 
-        self.err_array = np.zeros((_sh0, _sh1, _sh2))
         self.ha_array = np.zeros((_sh1, _sh2))
         self.azalt_array= np.zeros((2, _sh1, _sh2))
         for ii, key in enumerate(keys):
             self.data_array[:, ii, :] = srcdict[key]['data']
-            self.err_array[:, ii, :] = srcdict[key]['error']
             self.ha_array[ii, :] = srcdict[key]['ha']
             self.azalt_array[:, ii, :] = srcdict[key]['azalt']
         self.Nsrcs = _sh1
@@ -193,7 +201,7 @@ class catData(object):
         srcdict = copy.deepcopy(srcdict_xx)
         assert keys_xx == keys_yy, "both dictionary should have the same keywords."
         for key in keys_xx:
-            for skey in ['data', 'error']:
+            for skey in ['data']:
                 srcdict[key][skey] = np.array([srcdict_xx[key][skey], srcdict_yy[key][skey]])
         return srcdict
 
@@ -244,6 +252,7 @@ class catData(object):
         data = self.data_array
         npoints = self._get_npoints(dha)
         data_array = np.zeros((len(self.pols), self.Nsrcs, npoints))
+        err_array = np.zeros((len(self.pols), self.Nsrcs, npoints))
         azalt_array = np.zeros((2, self.Nsrcs, npoints))
         ha_array = np.zeros((self.Nsrcs, npoints))
         for ii in xrange(self.Nsrcs):
@@ -251,11 +260,20 @@ class catData(object):
             interp_azs, interp_alts = self._get_azalt(self.pos_array[ii][1], ha_array[ii, :])
             azalt_array[0, ii, :] = interp_azs
             azalt_array[1, ii, :] = interp_alts
+            #interpolating data
             for p in xrange(len(self.pols)):
                     interp_func = self._interpolate_data(self.ha_array[ii, :], data[p, ii, :], kind=kind)
                     data_array[p, ii, :] = interp_func(ha_array[ii, :])
+            #interpolating error
+            if self.err_array != '0':
+                for p in xrange(len(self.pols)):
+                    interp_func = self._interpolate_data(self.ha_array[ii, :], self.err_array[p, ii, :], kind=kind)
+                    err_array[p, ii, :] = interp_func(ha_array[ii, :])
+                       
+
         self.data_array = data_array
         self.azalt_array = azalt_array
+        self.err_array = err_array
         self.ha_array = ha_array
         self.Nfits = npoints
 
