@@ -144,7 +144,7 @@ def exportfits(imagename, fitsname=None, overwrite=False, script='exportfits', d
     task_opt = casawrapper.create_casa_options(imagename="'{}'".format(imagename), fitsimage="'{}'".format(fitsname), overwrite=overwrite)
     casawrapper.call_casa_task(task='exportfits', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
 
-def generate_complist_input(ras, decs, fluxs, sindex, freq, flux_unit='Jy', freq_unit='MHz', output='complist.dat'):
+def generate_complist_input(ras, decs, fluxs, sindex, freqs, flux_unit='Jy', freq_unit='MHz', output='complist.dat'):
     """
     Generates the inputs for complist task
     Parameters
@@ -154,7 +154,7 @@ def generate_complist_input(ras, decs, fluxs, sindex, freq, flux_unit='Jy', freq
     decs : list
         List of declinations in degrees.
     fluxs : list
-        List of flux densitu=y values in Jy
+        List of flux density values in Jy
     sindex : list
         List of spectral indices
     freq : float
@@ -173,18 +173,18 @@ def generate_complist_input(ras, decs, fluxs, sindex, freq, flux_unit='Jy', freq
     assert(len(ras) == len(fluxs))    
     assert(len(ras) == len(sindex))
     if freq_unit == 'Hz':
-        freq = freq * 1e-6
+        freqs = freqs * 1e-6
     if freq_unit == 'GHz':
-        freq = freq * 1e3
+        freqs = freqs * 1e3
     stdout = open(output, 'wb')
     for ii, ra in enumerate(ras):
         ra_str = ct.deg2hms(ra)
         dec_str = ct.deg2dms(decs[ii])
-        stdout.write('J2000 {} {}: {}: {}: {}\n'.format(ra_str, dec_str, fluxs[ii], sindex[ii], freq))
+        stdout.write('J2000 {} {}: {}: {}: {}\n'.format(ra_str, dec_str, fluxs[ii], sindex[ii], freqs[ii]))
     stdout.close()    
     return output
 
-def create_complist(infile, outfile, script='create_cl', delete=False):
+def create_complist(infile, outfile='component.cl', script='create_cl', delete=False):
     """
     Creates component list of sources
     Parameters:
@@ -200,6 +200,7 @@ def create_complist(infile, outfile, script='create_cl', delete=False):
         os.system('rm -rf {}'.format(outfile))
     stdout = open(script + '.py', 'wb')
     sources = numpy.loadtxt(infile, dtype='str', delimiter=':')
+    if sources.ndim == 1: sources = sources.reshape((1, len(sources)))
     for src in sources:
         task_opt = "dir='{}', flux={}, fluxunit='Jy', shape='point', spectrumtype='spectral index', index={}, freq='{}MHz'".format(src[0], float(src[1]), float(src[2]), float(src[3])) 
         stdout.write('cl.addcomponent({})\n'.format(task_opt))    
