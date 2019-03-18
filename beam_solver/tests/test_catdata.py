@@ -16,11 +16,12 @@ h5file = os.path.join(DATA_PATH, 'srcd.h5')
 ras = [74.26237654, 41.91116875, 22.47460079, 9.8393989, 356.25426296]
 decs = [-52.0209015, -43.2292595, -30.27372862, -17.40763737, -0.3692835]
 
-def create_catdata(data, ha, nsrcs, npoints, pols=['xx']):
+def create_catdata(data, ha, nsrcs, npoints, error='0', pols=['xx']):
     catd = cd.catData()
     #catd.azalt_array = azalt
     catd.data_array = data
     catd.ha_array = ha
+    catd.err_array = error
     catd.Nfits = npoints
     catd.Nsrcs = nsrcs
     catd.pols = pols
@@ -98,7 +99,6 @@ class Test_catData():
         nt.assert_equal(catd.Nsrcs, len(ras))
         nt.assert_equal(catd.azalt_array.shape, (2, len(ras), 1))
         nt.assert_equal(catd.data_array.shape, (1, len(ras), 1))
-        nt.assert_equal(catd.err_array.shape, (1, len(ras), 1))
         nt.assert_equal(catd.ha_array.shape, (len(ras), 1))
 
     def test_gen_catalog_2pol(self):
@@ -109,7 +109,6 @@ class Test_catData():
         nt.assert_equal(catd.Nsrcs, len(ras))
         nt.assert_equal(catd.azalt_array.shape, (2, len(ras), 1))
         nt.assert_equal(catd.data_array.shape, (2, len(ras), 1))
-        nt.assert_equal(catd.err_array.shape, (2, len(ras), 1))
         nt.assert_equal(catd.ha_array.shape, (len(ras), 1))
 
     def test_catalog_vals(self):
@@ -156,7 +155,8 @@ class Test_catData():
     def test_interpolate_catalog(self):
         data = np.array([[[0., 0.5, 1., 1.5, 2.]]])
         ha = np.array([[-np.pi/2, -np.pi/4, 0, np.pi/4, np.pi/2]])
-        catd = create_catdata(data, ha, 1, 5)
+        error = np.array([[[0.01, 0.02, 0.01, 0.025, 0.05]]])
+        catd = create_catdata(data, ha, 1, 5, error=error)
         catd.pos_array = np.array([(30.01, -30.43)])
         catd_copy = copy.deepcopy(catd) 
         catd_copy.interpolate_catalog(dha = np.pi/8)
@@ -164,8 +164,15 @@ class Test_catData():
         np.testing.assert_almost_equal(catd_copy.ha_array[0, :], np.linspace(-np.pi/2, np.pi/2, 9))
         np.testing.assert_almost_equal(catd_copy.data_array[0, 0, :], f(np.linspace(-np.pi/2, np.pi/2, 9)))
         nt.assert_equal(catd_copy.Nfits, 9)
-        nt.assert_equal(len(catd_copy.azalt_array[0, 0, :]), 9) 
+        nt.assert_equal(len(catd_copy.azalt_array[0, 0, :]), 9)
+        nt.assert_equal(catd_copy.err_array.shape, catd_copy.data_array.shape) 
  
+    def test_calc_error(self):
+        catd = cd.catData()
+        catd.gen_catalog(ras, decs, [outfile], return_data=True)
+        catd.calc_error([outfile], pol='xx')
+        nt.assert_equal(catd.err_array.shape, (1, 5, 1))
+
     def test_write_hdf5(self):
         catd = cd.catData()
         catd.gen_catalog(ras, decs, [outfile])
