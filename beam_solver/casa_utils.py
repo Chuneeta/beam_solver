@@ -2,7 +2,7 @@ import numpy
 import pylab
 import os, sys
 import casawrapper
-import coord_utils as ct
+import coord_utils as cd
 
 def uvfits2ms(uvfits, outfile=None, script='uvfits2ms', delete=True):
     """
@@ -178,8 +178,8 @@ def generate_complist_input(ras, decs, fluxs, sindex, freqs, flux_unit='Jy', fre
         freqs = freqs * 1e3
     stdout = open(output, 'wb')
     for ii, ra in enumerate(ras):
-        ra_str = ct.deg2hms(ra)
-        dec_str = ct.deg2dms(decs[ii])
+        ra_str = cd.deg2hms(ra)
+        dec_str = cd.deg2dms(decs[ii])
         stdout.write('J2000 {} {}: {}: {}: {}\n'.format(ra_str, dec_str, fluxs[ii], sindex[ii], freqs[ii]))
     stdout.close()    
     return output
@@ -210,7 +210,7 @@ def create_complist(infile, outfile='component.cl', script='create_cl', delete=F
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
     casawrapper.call_casa_script(script + '.py', casa_opts=casa_opt, delete=delete)
 
-def ft(dset, complist, script='ft', delete=False):
+def ft(dset, complist=None, script='ft', delete=False):
     """
     Fourier transforming model (complist) and writing the resulting visibilities into the MODEL column
     Parameters
@@ -226,6 +226,21 @@ def ft(dset, complist, script='ft', delete=False):
         Deletes the casapy script that was created on-the-fly after execution
     """
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
-    task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), complist="'{}'".format(complist ), usescratch=True)
+    if complist is None:
+        task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), usescratch=True)
+    else:
+        task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), complist="'{}'".format(complist ), usescratch=True)
     casawrapper.call_casa_task(task='ft', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete) 
-    
+
+def subtract_model(dset, script='subtract_mod', delete=False):
+    casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
+    task_opt = "ms = casac.table()\n"
+    task_opt += "ms.open('{}', nomodify=False)\n".format(dset)
+    task_opt += "data = ms.getcol('CORRECTED_DATA') if 'CORRECTED_DATA' in ms.colnames() else ms.getcol('DATA')\n"
+    #task_opt + = "data = ms.getcol('CORRECTED_DATA')"
+    #task_opt + = "mod_data = ms.getcol('MODEL_DATA')"
+    task_opt += "ms.putcol('DATA', data - ms.getcol('MODEL_DATA'))\n"
+    stdout = open(script + ".py", "w")
+    stdout.write(task_opt)
+    stdout.close()
+    casawrapper.call_casa_script(script + ".py", casa_opt, delete=delete )
