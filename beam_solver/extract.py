@@ -55,6 +55,6 @@ def get_peakflux(fitsfile, ra, dec, radius=None, negative=False):
         flux, err = peakval, peak_err
     else:
         warnings.warn('WARNING: Right ascension or declination outside image field, therefore values are set to nan', Warning)
-        flux, err = np.nan, np.nan
+        flux, err, std = np.nan, np.nan, np.nan
     
-    return {'freq': freq, 'flux': flux, 'error': err}
+    return {'freq': freq, 'flux': flux, 'error': err, 'std': std}
