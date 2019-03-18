@@ -50,10 +50,16 @@ def test_exportfits():
     os.system('rm -rf {}'.format(fitsname))
 
 def test_generate_complist_input():
-    pass
+    ct.generate_complist_input([30.69], [-30.75], [-1], [0], [151], output='complist.dat')
+    cmplist = np.loadtxt('complist.dat', dtype='str', delimiter=':')
+    nt.assert_almost_equal(cmplist[0], 'J2000 2h2m45.6s -30d45m0.0s')
+    os.system('rm -rf complist.dat')
 
 def test_create_complist():
-    pass
+    ct.generate_complist_input([30.69], [-30.75], [-1], [0], [151], output='complist.dat')    
+    ct.create_complist('complist.dat', 'component.cl')
+    nt.assert_true(os.path.exists('component.cl'))
+    os.system('rm -rf complist.dat')
 
 def test_ft():
     pass
