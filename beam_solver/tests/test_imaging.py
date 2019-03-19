@@ -38,6 +38,13 @@ class Test_Imaging():
         img.remove_image(imagename, del_img=True)
         nt.assert_false(os.path.exists(imagename + '.image'))
 
+    def test_subtract_model(self):
+        img = im.Imaging(msfile)
+        outfile = 'residual_vis.ms'
+        img.subtract_model(outfile, del_script=True)
+        nt.assert_true(os.path.exists(outfile))    
+        os.system('rm -rf {}'.format(outfile))
+
     def test_delete_log(self):
         img = im.Imaging(msfile)
         img.delete_log()
