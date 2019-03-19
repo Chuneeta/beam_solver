@@ -132,6 +132,15 @@ class Imaging(object):
         pylab.title(title, size=12)
         pylab.show()
 
+    def subtract_model(self, outfile, del_script=True):
+        """
+        Subtracts CLEAN model from data
+        outfile : str
+              Name of the output residual file
+        """
+        os.system('cp -r {} {}'.format(self.ms, outfile))        
+        ct.subtract_model(outfile, delete=del_script)
+        
     def delete_log(self):
         """
         Delete unecessary files created during execution
