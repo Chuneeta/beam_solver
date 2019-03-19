@@ -236,10 +236,9 @@ def subtract_model(dset, script='subtract_mod', delete=False):
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
     task_opt = "ms = casac.table()\n"
     task_opt += "ms.open('{}', nomodify=False)\n".format(dset)
-    task_opt += "data = ms.getcol('CORRECTED_DATA') if 'CORRECTED_DATA' in ms.colnames() else ms.getcol('DATA')\n"
-    #task_opt + = "data = ms.getcol('CORRECTED_DATA')"
-    #task_opt + = "mod_data = ms.getcol('MODEL_DATA')"
-    task_opt += "ms.putcol('DATA', data - ms.getcol('MODEL_DATA'))\n"
+    task_opt += "if 'MODEL_DATA' in ms.colnames():\n"
+    task_opt += "   data = ms.getcol('CORRECTED_DATA') if 'CORRECTED_DATA' in ms.colnames() else ms.getcol('DATA')\n"
+    task_opt += "   ms.putcol('DATA', data - ms.getcol('MODEL_DATA'))\n"
     stdout = open(script + ".py", "w")
     stdout.write(task_opt)
     stdout.close()
