@@ -200,7 +200,7 @@ class BeamOnly():
 
         return obsbeam
 
-    def add_eqs(self, catalog_flux, theta=[0], flip=[1], polnum=0, **kwargs):
+    def add_eqs(self, catalog_flux, theta=[0], flip=[1], polnum=0, flux_thresh=1, **kwargs):
         """
         Construct a linear system of equations of the form
 
@@ -230,7 +230,7 @@ class BeamOnly():
                     ps, ws = self.get_weights(self.cat.azalt_array[:, i, :], th, fl)
                     for j in xrange(nfits):
                         I_s = obs_vals[i, j]
-                        if np.isnan(I_s): continue
+                        if np.isnan(I_s) or I_s < flux_thresh:continue
                         self._mk_eq(ps, ws, I_s, catalog_flux[i], i, j, **kwargs)
 
     def solve(self, **kwargs):
@@ -302,7 +302,7 @@ class BeamCat(BeamOnly):
             bpix = int(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))
             self.sol_dict['b%d'%bpix] = bvals[bpix]
 
-    def add_eqs(self, catalog_flux, theta=[0], flip=[1], polnum=0, **kwargs):
+    def add_eqs(self, catalog_flux, theta=[0], flip=[1], polnum=0, flux_thresh=1, **kwargs):
         """
         Construct a non linear system of equations of the form
 
@@ -334,7 +334,7 @@ class BeamCat(BeamOnly):
                     ps, ws = self.get_weights(self.cat.azalt_array[:, i, :], th, fl)
                     for j in xrange(nfits):
                         I_s = obs_vals[i, j]
-                        if np.isnan(I_s): continue
+                        if np.isnan(I_s) or I_s < flux_thresh: continue
                         self._mk_eq(ps, ws, I_s, catalog_flux[i], i, j, **kwargs)
 
     def _build_solver(self, norm_weight=100, **kwargs):
@@ -384,7 +384,7 @@ class BeamOnlyCross(BeamOnly):
         """
         BeamOnly.__init__(self, cat, bm_pix)
         
-    def add_eqs(self, catalog_flux_xx, catalog_flux_yy, theta_xx=[0], theta_yy=[np.pi/2], flip_xx=[1], flip_yy=[1], **kwargs):
+    def add_eqs(self, catalog_flux_xx, catalog_flux_yy, theta_xx=[0], theta_yy=[np.pi/2], flip_xx=[1], flip_yy=[1], flux_thresh=1, **kwargs):
         """
         Construct a linear system of equations of the form
 
@@ -403,8 +403,8 @@ class BeamOnlyCross(BeamOnly):
         catalog_flux : list or np.ndarray
             List or array containing the model/catalog flux values to be used as I_mod.
         """
-        BeamOnly.add_eqs(self, catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx, polnum=0)
-        BeamOnly.add_eqs(self, catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, polnum=1)
+        BeamOnly.add_eqs(self, catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx, flux_thresh=flux_thresh, polnum=0)
+        BeamOnly.add_eqs(self, catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, flux_thresh=flux_thresh, polnum=1)
 
     def solve(self, **kwargs):
         """
