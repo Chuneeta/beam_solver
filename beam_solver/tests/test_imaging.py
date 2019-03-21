@@ -22,6 +22,7 @@ class Test_Imaging():
 
     def test_to_fits(self):
         img = im.Imaging(msfile)
+        img.generate_image(imagename)
         img.to_fits(imagename)
         nt.assert_true(os.path.exists(imagename + '.fits'))
 
