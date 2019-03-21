@@ -1,4 +1,5 @@
-import casa_utils as ct
+from beam_solver import casa_utils as ct
+from beam_solver import fits_utils as ft
 from astropy.io import fits
 from astropy import wcs
 import numpy as np
@@ -97,7 +98,7 @@ class Imaging(object):
             Default is False.
         """
         input_image = imagename + '.image'
-        ct.exportfits(input_image, fitsname=fitsname, overwrite=overwrite)
+        ct.exportfits(input_image, fitsname=fitsname, script=script, overwrite=overwrite)
 
     def plot_image(self, fitsfile, cmap='gray', vmin=None, vmax=None, title=''):
         """
@@ -115,7 +116,8 @@ class Imaging(object):
             Minimum colorbar value for the plot. Default is
             maximum of the data.
         """
-        data, header = self.read_fits(fitsfile)
+        fitsinfo = ft.get_fitsinfo(fitsfile)
+        data, header = fitsinfo['data'], fitsinfo['hdr']
         my_wcs = wcs.WCS(header, naxis=[wcs.WCSSUB_CELESTIAL])
         if vmin is None:
             vmin = np.min(data)
