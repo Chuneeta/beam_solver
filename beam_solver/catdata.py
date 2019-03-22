@@ -23,7 +23,7 @@ class catData(object):
         self.Nfits = None
         self.Nsrcs  = None
         self.pols = None
-        self.err_array = '0'
+        self.error_array = None
 
     def get_unique(self, ras, decs, tol=5):
         """
@@ -109,26 +109,30 @@ class catData(object):
         az, alt = ct.hadec2azalt(dec * np.pi/180., ha)
         return az, alt
 
-    def _generate_srcdict(self, ras, decs, fitsfiles):
+    def _generate_srcdict(self, ras, decs, fitsfiles, flux_type):
         """
         Extracts flux measurements at specified right ascension and declination values from the fitsfiles
         and return dictionary containing the data and necessary metadata for single polarization.
         polarization. 
         Parameters
         ---------
-        fitsfiles : list of str
-            List of of xx or yy fitsfiles that will be used to extract the flux values.
         ras : list of float
             List of right ascension values in degrees.
         decs : list of floats
             List of declination values in degrees.
-        """
+        fitsfiles : list of str
+            List of of xx or yy fitsfiles that will be used to extract the flux values.
+        flux_type : str
+            Flux type to extract, options: 
+                'pflux'       : peak value from the data
+                'gauss_pflux' : peak value of the 2d gaussian fit of the data
+                'gauss_tflux' : total integrated value of the 2d gaussian fit of the data                        """
         # selecting unique ras and decs
         nsrcs = len(ras)
         nfits = len(fitsfiles)
         srcdict = OrderedDict()
         ha_array = np.zeros((nsrcs, nfits))
-        #err_array = np.zeros((nsrcs, nfits))
+        error_array = np.zeros((nsrcs, nfits))
         data_array = np.zeros((nsrcs, nfits))
         azalt_array = np.zeros((2, nsrcs, nfits))
         jds = self._get_jds(fitsfiles)
@@ -136,30 +140,20 @@ class catData(object):
             key = (round(ra, 2), round(decs[ii], 2))
             if not key in srcdict: srcdict[key] = {}
             for jj, fn in enumerate(fitsfiles):
-                srcstats = et.get_peakflux(fn, ra, decs[ii])
+                srcstats = et.get_flux(fn, ra, decs[ii])
                 lst, ha = self._get_lstha(jds[jj], ra)
                 az, alt = self._get_azalt(decs[ii], ha)
                 ha_array[ii, jj] = ha
-                #err_array[ii, jj] = srcstats['error']
-                data_array[ii, jj] = srcstats['flux']
+                error_array[ii, jj] = srcstats['error']
+                data_array[ii, jj] = srcstats[flux_type]
                 azalt_array[0, ii, jj] = az
                 azalt_array[1, ii, jj] = alt
                 # saving to dictionary
             srcdict[key]['data'] = data_array[ii,  :]
-            #srcdict[key]['error'] = err_array[ii, :]
+            srcdict[key]['error'] = error_array[ii, :]
             srcdict[key]['ha'] = ha_array[ii, :]
             srcdict[key]['azalt'] = azalt_array[:, ii, :]
         return srcdict
-
-    def calc_error(self, res_fitsfiles, pol):
-        self.err_array = np.zeros((len(self.pols), self.Nsrcs, self.Nfits))
-        for ii, pos in enumerate(self.pos_array):
-            for jj, fn in enumerate(res_fitsfiles):
-                resstats = et.get_peakflux(fn, pos[0], pos[1])            
-                if len(self.pols) == 1:
-                    self.err_array[0, ii, jj] = resstats['std']
-                else:
-                    self.err_array[pol2ind(pol), ii, jj] = resstats['std']        
 
     def _srcdict_catdata(self, srcdict):
         """
@@ -179,10 +173,12 @@ class catData(object):
         else:
             _sh0 = _sh[0]; _sh2 = _sh[1]  
         self.data_array = np.zeros((_sh0, _sh1, _sh2)) 
+        self.error_array = np.zeros((_sh0, _sh1, _sh2))
         self.ha_array = np.zeros((_sh1, _sh2))
         self.azalt_array= np.zeros((2, _sh1, _sh2))
         for ii, key in enumerate(keys):
             self.data_array[:, ii, :] = srcdict[key]['data']
+            self.error_array[:, ii, :] = srcdict[key]['error']
             self.ha_array[ii, :] = srcdict[key]['ha']
             self.azalt_array[:, ii, :] = srcdict[key]['azalt']
         self.Nsrcs = _sh1
@@ -205,7 +201,7 @@ class catData(object):
                 srcdict[key][skey] = np.array([srcdict_xx[key][skey], srcdict_yy[key][skey]])
         return srcdict
 
-    def gen_catalog(self, ras, decs, fitsfiles_xx, fitsfiles_yy=None, pols='xx', return_data=False):
+    def gen_catalog(self, ras, decs, fitsfiles_xx, fitsfiles_yy=None, pols='xx', flux_type='pflux', return_data=False):
         """
         Extracts flux measurements at specified right ascension and declination values from the fitsfiles
         and generates a catdata object containing the data and necessary metadata for xx or yy or both
@@ -222,6 +218,11 @@ class catData(object):
             List of of yy fitsfiles that will be used to generate or extract the source catalog.
         pol : str ot list of str
             Polizations can be xx or yy or both.
+        flux_type : str
+            Flux type to extract, options:
+                'pflux'       : peak value from the data
+                'gauss_pflux' : peak value of the 2d gaussian fit of the data
+                'gauss_tflux' : total integrated value of the 2d gaussian fit of the data
         return_data : boolean
             If True, returns dictionary with the data values and selected metadata.
         """
@@ -230,10 +231,10 @@ class catData(object):
         npols = len(pols)
         if npols == 1:
             fitsfiles = fitsfiles_xx if pols[0] == 'xx' else fitsfiles_yy 
-            srcdict = self._generate_srcdict(ras, decs, fitsfiles_xx) 
+            srcdict = self._generate_srcdict(ras, decs, fitsfiles_xx, flux_type) 
         else:
-            srcdict_xx = self._generate_srcdict(ras, decs, fitsfiles_xx)
-            srcdict_yy = self._generate_srcdict(ras, decs, fitsfiles_yy)
+            srcdict_xx = self._generate_srcdict(ras, decs, fitsfiles_xx, flux_type)
+            srcdict_yy = self._generate_srcdict(ras, decs, fitsfiles_yy, flux_type)
             srcdict = self._combine_srcdict(srcdict_xx, srcdict_yy)        
         self._srcdict_catdata(srcdict)
         self.pols = pols
@@ -252,7 +253,7 @@ class catData(object):
         data = self.data_array
         npoints = self._get_npoints(dha)
         data_array = np.zeros((len(self.pols), self.Nsrcs, npoints))
-        err_array = np.zeros((len(self.pols), self.Nsrcs, npoints))
+        error_array = np.zeros((len(self.pols), self.Nsrcs, npoints))
         azalt_array = np.zeros((2, self.Nsrcs, npoints))
         ha_array = np.zeros((self.Nsrcs, npoints))
         for ii in xrange(self.Nsrcs):
@@ -265,15 +266,12 @@ class catData(object):
                     interp_func = self._interpolate_data(self.ha_array[ii, :], data[p, ii, :], kind=kind)
                     data_array[p, ii, :] = interp_func(ha_array[ii, :])
             #interpolating error
-            if self.err_array != '0':
-                for p in xrange(len(self.pols)):
-                    interp_func = self._interpolate_data(self.ha_array[ii, :], self.err_array[p, ii, :], kind=kind)
-                    err_array[p, ii, :] = interp_func(ha_array[ii, :])
+                    interp_func = self._interpolate_data(self.ha_array[ii, :], self.error_array[p, ii, :], kind=kind)
+                    error_array[p, ii, :] = interp_func(ha_array[ii, :])
                        
-
         self.data_array = data_array
         self.azalt_array = azalt_array
-        self.err_array = err_array
+        self.error_array = error_array
         self.ha_array = ha_array
         self.Nfits = npoints
 
@@ -300,7 +298,7 @@ class catData(object):
             mgp['Nsrcs'] = self.Nsrcs
             mgp['pols'] = self.pols
             mgp['ha_array'] = self.ha_array
-            mgp['err_array'] = self.err_array
+            mgp['error_array'] = self.error_array
             mgp['pos_array'] = self.pos_array
             mgp['azalt_array'] = self.azalt_array
             # write data to file
@@ -322,7 +320,7 @@ class catData(object):
             self.Nsrcs = mgp['Nsrcs'].value
             self.pols = mgp['pols'].value
             self.ha_array = mgp['ha_array'].value
-            self.err_array = mgp['err_array'].value
+            self.error_array = mgp['error_array'].value
             self.pos_array = mgp['pos_array'].value
             self.azalt_array = mgp['azalt_array'].value
             # read data

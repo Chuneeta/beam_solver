@@ -21,7 +21,7 @@ def create_catdata(data, ha, nsrcs, npoints, error='0', pols=['xx']):
     #catd.azalt_array = azalt
     catd.data_array = data
     catd.ha_array = ha
-    catd.err_array = error
+    catd.error_array = error
     catd.Nfits = npoints
     catd.Nsrcs = nsrcs
     catd.pols = pols
@@ -65,7 +65,7 @@ class Test_catData():
 
     def test_generate_srcdict(self):
         catd = cd.catData()
-        srcdict = catd._generate_srcdict(ras, decs, [outfile])
+        srcdict = catd._generate_srcdict(ras, decs, [outfile], flux_type='pflux')
         keys = srcdict.keys()
         nt.assert_equal(len(keys), len(ras))
         data = srcdict[keys[0]]['data']
@@ -74,16 +74,16 @@ class Test_catData():
 
     def test_srcdict_catdata(self):
         catd = cd.catData()
-        srcdict = catd._generate_srcdict(ras, decs, [outfile])
+        srcdict = catd._generate_srcdict(ras, decs, [outfile], flux_type='gauss_pflux')
         catd._srcdict_catdata(srcdict)
         nt.assert_equal(catd.data_array.shape, (1, len(ras), 1))
         np.testing.assert_almost_equal(catd.pos_array, srcdict.keys())
 
     def test_combine_srcdict(self):
         catd1 = cd.catData()
-        srcdict1 = catd1._generate_srcdict(ras, decs, [outfile])
+        srcdict1 = catd1._generate_srcdict(ras, decs, [outfile], flux_type='pflux')
         catd2 = cd.catData()
-        srcdict2 = catd2._generate_srcdict(ras, decs, [outfile])
+        srcdict2 = catd2._generate_srcdict(ras, decs, [outfile], flux_type='pflux')
         catd = cd.catData()
         srcdict = catd._combine_srcdict(srcdict1, srcdict2)
         keys = srcdict.keys()
@@ -165,13 +165,13 @@ class Test_catData():
         np.testing.assert_almost_equal(catd_copy.data_array[0, 0, :], f(np.linspace(-np.pi/2, np.pi/2, 9)))
         nt.assert_equal(catd_copy.Nfits, 9)
         nt.assert_equal(len(catd_copy.azalt_array[0, 0, :]), 9)
-        nt.assert_equal(catd_copy.err_array.shape, catd_copy.data_array.shape) 
+        nt.assert_equal(catd_copy.error_array.shape, catd_copy.data_array.shape) 
  
-    def test_calc_error(self):
-        catd = cd.catData()
-        catd.gen_catalog(ras, decs, [outfile], return_data=True)
-        catd.calc_error([outfile], pol='xx')
-        nt.assert_equal(catd.err_array.shape, (1, 5, 1))
+    #def test_calc_error(self):
+    #    catd = cd.catData()
+    #    catd.gen_catalog(ras, decs, [outfile], return_data=True)
+    #    catd.calc_error([outfile], pol='xx')
+    #    nt.assert_equal(catd.err_array.shape, (1, 5, 1))
 
     def test_write_hdf5(self):
         catd = cd.catData()
