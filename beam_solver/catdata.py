@@ -231,7 +231,7 @@ class catData(object):
         npols = len(pols)
         if npols == 1:
             fitsfiles = fitsfiles_xx if pols[0] == 'xx' else fitsfiles_yy 
-            srcdict = self._generate_srcdict(ras, decs, fitsfiles_xx, flux_type) 
+            srcdict = self._generate_srcdict(ras, decs, fitsfiles, flux_type) 
         else:
             srcdict_xx = self._generate_srcdict(ras, decs, fitsfiles_xx, flux_type)
             srcdict_yy = self._generate_srcdict(ras, decs, fitsfiles_yy, flux_type)
