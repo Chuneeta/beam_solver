@@ -201,7 +201,7 @@ class catData(object):
                 srcdict[key][skey] = np.array([srcdict_xx[key][skey], srcdict_yy[key][skey]])
         return srcdict
 
-    def gen_catalog(self, ras, decs, fitsfiles_xx, fitsfiles_yy=None, pols='xx', flux_type='pflux', return_data=False):
+    def gen_catalog(self, ras, decs, fitsfiles_xx=None, fitsfiles_yy=None, pols='xx', flux_type='pflux', return_data=False):
         """
         Extracts flux measurements at specified right ascension and declination values from the fitsfiles
         and generates a catdata object containing the data and necessary metadata for xx or yy or both
