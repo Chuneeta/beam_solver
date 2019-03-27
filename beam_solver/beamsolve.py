@@ -5,7 +5,7 @@ import time
 from collections import OrderedDict
 
 class BeamOnly():
-    def __init__(self, cat=None, bm_pix=60):
+    def __init__(self, cat=None, bm_pix=61):
         """
         Object that stores the flux catalog containing the flux values for one
         polarization and solves for the primary beam only.
@@ -259,7 +259,7 @@ class BeamOnly():
         return obs_beam
     
 class BeamCat(BeamOnly):
-    def __init__(self, cat, bm_pix=60):
+    def __init__(self, cat, bm_pix=61):
         """
         Object that stores the flux catalog containing the flux values for one
         polarization and solves for both the true flux values of the sources and
@@ -377,7 +377,7 @@ class BeamCat(BeamOnly):
         return fluxvals, obs_beam
 
 class BeamOnlyCross(BeamOnly):
-    def __init__(self, cat, bm_pix=60):
+    def __init__(self, cat, bm_pix=61):
         """
         Object that stores the flux catalog containing the flux values for xx and yy
         polarization and solves for the primary beam only using both polarizations.
@@ -415,7 +415,7 @@ class BeamOnlyCross(BeamOnly):
         return sol
         
 class BeamCatCross(BeamCat):
-    def __init__(self, cat=None, bm_pix=60):
+    def __init__(self, cat=None, bm_pix=61):
         """
         Object that stores the flux catalog containing the flux values for xx and yy
         polarization and solves for both the flux values of the sources and the primary 
