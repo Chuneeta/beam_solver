@@ -28,8 +28,8 @@ def get_flux(fitsfile, ra, dec):
     dy_px = np.abs(w.wcs.cdelt[1])
     bmaj_px = bmaj / dx_px
     bmin_px = bmin / dy_px
-    bm_radius =  np.sqrt(bmaj**2 + bmin**2)/2
-    bm_radius_px = np.sqrt(bmaj_px**2 + bmin_px**2)/2.
+    bm_radius =  np.sqrt(bmaj**2 + bmin**2)
+    bm_radius_px = np.sqrt(bmaj_px**2 + bmin_px**2)
     bm_area = bmaj * bmin * np.pi / 4 / np.log(2)
     px_area = dx_px * dy_px
     bm_npx = bm_area / px_area
