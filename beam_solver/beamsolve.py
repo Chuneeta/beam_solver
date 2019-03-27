@@ -200,7 +200,7 @@ class BeamOnly():
 
         return obsbeam
 
-    def add_eqs(self, catalog_flux, theta=[0], flip=[1], polnum=0, flux_thresh=1, **kwargs):
+    def add_eqs(self, catalog_flux, theta=[0], flip=[1], polnum=0, flux_thresh=0, **kwargs):
         """
         Construct a linear system of equations of the form
 
@@ -302,7 +302,7 @@ class BeamCat(BeamOnly):
             bpix = int(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))
             self.sol_dict['b%d'%bpix] = bvals[bpix]
 
-    def add_eqs(self, catalog_flux, theta=[0], flip=[1], polnum=0, flux_thresh=1, **kwargs):
+    def add_eqs(self, catalog_flux, theta=[0], flip=[1], polnum=0, flux_thresh=0, **kwargs):
         """
         Construct a non linear system of equations of the form
 
@@ -384,7 +384,7 @@ class BeamOnlyCross(BeamOnly):
         """
         BeamOnly.__init__(self, cat, bm_pix)
         
-    def add_eqs(self, catalog_flux_xx, catalog_flux_yy, theta_xx=[0], theta_yy=[np.pi/2], flip_xx=[1], flip_yy=[1], flux_thresh=1, **kwargs):
+    def add_eqs(self, catalog_flux_xx, catalog_flux_yy, theta_xx=[0], theta_yy=[np.pi/2], flip_xx=[1], flip_yy=[1], flux_thresh=0, **kwargs):
         """
         Construct a linear system of equations of the form
 
