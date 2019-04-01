@@ -74,7 +74,7 @@ class Test_BeamOnly():
     def test_init(self):
         catd = cd.catData()
         bms = bs.BeamOnly(catd)
-        nt.assert_equal(bms.bm_pix, 60)
+        nt.assert_equal(bms.bm_pix, 61)
         nt.assert_equal(bms.cat, catd)
         bms = bs.BeamOnly(catd, 30)
         nt.assert_equal(bms.bm_pix, 30)
@@ -150,7 +150,7 @@ class Test_BeamOnly():
     def test_mk_eq(self):
         bms = bs.BeamOnly(bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
-        bms._mk_eq(ps, ws, 1, 1, 0, 0)
+        bms._mk_eq(ps, ws, 1, 1, 0, 0, equal_wgts=True)
         eq_keys = bms.eqs.keys()
         cns_keys = bms.consts.keys()
         nt.assert_almost_equal(len(eq_keys), 1)
@@ -164,14 +164,14 @@ class Test_BeamOnly():
     def test_eqs(self):
         bms = bs.BeamOnly(catd, 31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
-        bms._mk_eq(ps, ws, 1, 1, 0, 0)
+        bms._mk_eq(ps, ws, 1, 1, 0, 0, equal_wgts=True)
         eq_keys = bms.eqs.keys()
         nt.assert_almost_equal(bms.eqs[eq_keys[0]], 1)
 
     def test_consts(self):
         bms = bs.BeamOnly(bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
-        bms._mk_eq(ps, ws, 1, 1, 0, 0)
+        bms._mk_eq(ps, ws, 1, 1, 0, 0, equal_wgts=True)
         cns_keys = bms.consts.keys()
         nt.assert_almost_equal(len(cns_keys), 4)
         px0 = bms.unravel_pix(31, (15, 15))
@@ -186,14 +186,14 @@ class Test_BeamOnly():
     def test_build_solver(self):
         bms = bs.BeamOnly(bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
-        bms._mk_eq(ps, ws, 1, 1, 0, 0)
+        bms._mk_eq(ps, ws, 1, 1, 0, 0, equal_wgts=True)
         bms._build_solver()
         nt.assert_true(isinstance(bms.ls, linsolve.LinearSolver))
 
     def test_get_A(self):
         bms = bs.BeamOnly(bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
-        bms._mk_eq(ps, ws, 1, 1, 0, 0)
+        bms._mk_eq(ps, ws, 1, 1, 0, 0, equal_wgts=True)
         bms._build_solver()
         A = bms.get_A(bms.ls)
         np.testing.assert_almost_equal(A, np.array([[[0.], [0.], [0.], [1.]]]))
@@ -201,7 +201,7 @@ class Test_BeamOnly():
     def test_svd(self):
         bms = bs.BeamOnly(bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
-        bms._mk_eq(ps, ws, 1, 1, 0, 0)
+        bms._mk_eq(ps, ws, 1, 1, 0, 0, equal_wgts=True)
         bms._build_solver()
         A = bms.get_A(bms.ls)
         U, S, V = bms.svd(bms.ls, A)
@@ -290,7 +290,7 @@ class Test_BeamCat():
     def test_mk_eq(self):
         bms = bs.BeamCat(cat=catd, bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
-        bms._mk_eq(ps, ws, 1, 1, 0, 0, bvals=np.ones((31, 31)))
+        bms._mk_eq(ps, ws, 1, 1, 0, 0, equal_wgts=False, bvals=np.ones((31, 31)))
         eq_keys = bms.eqs.keys()
         cns_keys = bms.consts.keys()
         nt.assert_almost_equal(len(eq_keys), 1)
@@ -304,7 +304,7 @@ class Test_BeamCat():
     def test_consts(self):
         bms = bs.BeamCat(cat=catd, bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
-        bms._mk_eq(ps, ws, 1, 1, 0, 0, bvals=np.ones((31, 31)))
+        bms._mk_eq(ps, ws, 1, 1, 0, 0, bvals=np.ones((31, 31)), equal_wgts=False)
         cns_keys = bms.consts.keys()
         nt.assert_almost_equal(len(cns_keys), 4)
         px0 = bms.unravel_pix(31, (15, 15))

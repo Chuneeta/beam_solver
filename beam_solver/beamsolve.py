@@ -98,7 +98,7 @@ class BeamOnly():
         ws = [w0, w1, w2, w3] 
         return ps, ws
 
-    def _mk_eq(self, ps, ws, obs_flux, catalog_flux, srcid, timeid, **kwargs):
+    def _mk_eq(self, ps, ws, obs_flux, catalog_flux, srcid, timeid, equal_wgts, **kwargs):
         """
         Constructs equations that will form the linear system of equations.
         Parameters
@@ -118,13 +118,19 @@ class BeamOnly():
         timeid : int
             Time identity or timestamps.
         """
+        if equal_wgts is True:
+            flux_wgts = 1
+            divisor = catalog_flux
+        else:
+            flux_wgts = catalog_flux
+            divisor = 1
         i = srcid; j = timeid
-        c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0,j], ps[p][1,j])), i, j): ws[p][j] for p in xrange(4)}
+        c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0,j], ps[p][1,j])), i, j): flux_wgts * ws[p][j] for p in xrange(4)}
         eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
             + '*b%d'%(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))  for p in xrange(4)])
         #assert eq not in self.eqs, 'equation already exists.'
         if eq not in self.eqs:
-            self.eqs[eq] = obs_flux / catalog_flux
+            self.eqs[eq] = obs_flux / divisor
             self.consts.update(c)
 
     def calc_catalog_flux(self, beam_model, pol):
@@ -200,7 +206,7 @@ class BeamOnly():
 
         return obsbeam
 
-    def add_eqs(self, catalog_flux, theta=[0], flip=[1], polnum=0, flux_thresh=0, **kwargs):
+    def add_eqs(self, catalog_flux, theta=[0], flip=[1], polnum=0, flux_thresh=0, equal_wgts=True, **kwargs):
         """
         Construct a linear system of equations of the form
 
@@ -231,7 +237,7 @@ class BeamOnly():
                     for j in xrange(nfits):
                         I_s = obs_vals[i, j]
                         if np.isnan(I_s) or I_s < flux_thresh:continue
-                        self._mk_eq(ps, ws, I_s, catalog_flux[i], i, j, **kwargs)
+                        self._mk_eq(ps, ws, I_s, catalog_flux[i], i, j, equal_wgts, **kwargs)
 
     def solve(self, **kwargs):
         """
@@ -259,7 +265,7 @@ class BeamOnly():
         return obs_beam
     
 class BeamCat(BeamOnly):
-    def __init__(self, cat, bm_pix=61):
+    def __init__(self, cat=None, bm_pix=61):
         """
         Object that stores the flux catalog containing the flux values for one
         polarization and solves for both the true flux values of the sources and
@@ -267,7 +273,7 @@ class BeamCat(BeamOnly):
         """
         BeamOnly.__init__(self, cat, bm_pix)
 
-    def _mk_eq(self, ps, ws, obs_flux, catalog_flux, srcid, timeid, **kwargs):
+    def _mk_eq(self, ps, ws, obs_flux, catalog_flux, srcid, timeid, equal_wgts, **kwargs):
         """
         Constructs equations that will form the linear system of equations.
         Parameters
@@ -292,9 +298,13 @@ class BeamCat(BeamOnly):
         self.sol_dict['I%d'%i] = catalog_flux
         c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0,j], ps[p][1,j])), i, j): ws[p][j]
                     for p in xrange(4)}
-        eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
-            + '*b%d'% (self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))) + '*I%d'%i for p in xrange(4)])
-        #assert eq not in self.eqs, 'equation already exists.'
+        if equal_wgts:
+            eq1 = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
+            + '*b%d'% (self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))) for p in xrange(4)])
+            eq = 'I%d * (%s)'%(i, eq1)
+        else:
+            eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
+                + '*b%d'% (self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))) + '*I%d'%i for p in xrange(4)])
         if eq not in self.eqs:
             self.eqs[eq] = obs_flux
             self.consts.update(c)
@@ -302,7 +312,7 @@ class BeamCat(BeamOnly):
             bpix = int(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))
             self.sol_dict['b%d'%bpix] = bvals[bpix]
 
-    def add_eqs(self, catalog_flux, theta=[0], flip=[1], polnum=0, flux_thresh=0, **kwargs):
+    def add_eqs(self, catalog_flux, theta=[0], flip=[1], polnum=0, flux_thresh=0, equal_wgts=True, **kwargs):
         """
         Construct a non linear system of equations of the form
 
@@ -335,7 +345,7 @@ class BeamCat(BeamOnly):
                     for j in xrange(nfits):
                         I_s = obs_vals[i, j]
                         if np.isnan(I_s) or I_s < flux_thresh: continue
-                        self._mk_eq(ps, ws, I_s, catalog_flux[i], i, j, **kwargs)
+                        self._mk_eq(ps, ws, I_s, catalog_flux[i], i, j, equal_wgts, **kwargs)
 
     def _build_solver(self, norm_weight=100, **kwargs):
         """
@@ -377,14 +387,14 @@ class BeamCat(BeamOnly):
         return fluxvals, obs_beam
 
 class BeamOnlyCross(BeamOnly):
-    def __init__(self, cat, bm_pix=61):
+    def __init__(self, cat=None, bm_pix=61):
         """
         Object that stores the flux catalog containing the flux values for xx and yy
         polarization and solves for the primary beam only using both polarizations.
         """
         BeamOnly.__init__(self, cat, bm_pix)
         
-    def add_eqs(self, catalog_flux_xx, catalog_flux_yy, theta_xx=[0], theta_yy=[np.pi/2], flip_xx=[1], flip_yy=[1], flux_thresh=0, **kwargs):
+    def add_eqs(self, catalog_flux_xx, catalog_flux_yy, theta_xx=[0], theta_yy=[np.pi/2], flip_xx=[1], flip_yy=[1], flux_thresh=0, equal_wgts=True, **kwargs):
         """
         Construct a linear system of equations of the form
 
@@ -403,8 +413,8 @@ class BeamOnlyCross(BeamOnly):
         catalog_flux : list or np.ndarray
             List or array containing the model/catalog flux values to be used as I_mod.
         """
-        BeamOnly.add_eqs(self, catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx, flux_thresh=flux_thresh, polnum=0)
-        BeamOnly.add_eqs(self, catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, flux_thresh=flux_thresh, polnum=1)
+        BeamOnly.add_eqs(self, catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx, flux_thresh=flux_thresh, polnum=0, equal_wgts=equal_wgts)
+        BeamOnly.add_eqs(self, catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, flux_thresh=flux_thresh, polnum=1, equal_wgts=equal_wgts)
 
     def solve(self, **kwargs):
         """
@@ -423,7 +433,7 @@ class BeamCatCross(BeamCat):
         """
         BeamCat.__init__(self, cat, bm_pix)
 
-    def add_eqs(self, catalog_flux_xx, catalog_flux_yy, theta_xx=[0], theta_yy=[np.pi/2], flip_xx=[1], flip_yy=[1], polnum=0, **kwargs):
+    def add_eqs(self, catalog_flux_xx, catalog_flux_yy, theta_xx=[0], theta_yy=[np.pi/2], flip_xx=[1], flip_yy=[1], polnum=0, equal_wgts=True, **kwargs):
         """
         Construct a non linear system of equations of the form
 
@@ -453,8 +463,8 @@ class BeamCatCross(BeamCat):
             If True, constrained the center pixel to be one. It will error out if the sources are not
             transiting zenith. Default is False.
         """
-        BeamCat.add_eqs(self, catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx, polnum=0, **kwargs)
-        BeamCat.add_eqs(self, catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, polnum=1, **kwargs)
+        BeamCat.add_eqs(self, catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx, polnum=0, equal_wgts=equal_wgts, **kwargs)
+        BeamCat.add_eqs(self, catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, polnum=1, equal_wgts=equal_wgts, **kwargs)
 
     def solve(self, maxiter=50, conv_crit=1e-11, **kwargs):
         self._build_solver(**kwargs)
