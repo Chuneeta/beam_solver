@@ -17,13 +17,28 @@ class catData(object):
     """
     def __init__(self):
         self.data_array = None
+        self.error_array = None
         self.azalt_array = None
         self.ha_array = None
         self.pos_array = None
         self.Nfits = None
         self.Nsrcs  = None
         self.pols = None
-        self.error_array = None
+
+    def _get_attr(self, attr):
+        return getattr(self, attr)
+
+    def _set_attr(self, attr, value):
+        setattr(self, attr, value)        
+
+    def _getattrs(self):
+        ha_array = self._get_attr('ha_array')
+        data_array = self._get_attr('data_array')
+        error_array = self._get_attr('error_array')
+        pos_array = self._get_attr('pos_array')
+        azalt_array = self._get_attr('azalt_array')
+        nsrcs = self._get_attr('Nsrcs')
+        return data_array, error_array, azalt_array, ha_array, pos_array, nsrcs
 
     def get_unique(self, ras, decs, tol=5):
         """
@@ -136,23 +151,23 @@ class catData(object):
         data_array = np.zeros((nsrcs, nfits))
         azalt_array = np.zeros((2, nsrcs, nfits))
         jds = self._get_jds(fitsfiles)
-        for ii, ra in enumerate(ras):
-            key = (round(ra, 2), round(decs[ii], 2))
+        for i, ra in enumerate(ras):
+            key = (round(ra, 2), round(decs[i], 2))
             if not key in srcdict: srcdict[key] = {}
-            for jj, fn in enumerate(fitsfiles):
-                srcstats = et.get_flux(fn, ra, decs[ii])
-                lst, ha = self._get_lstha(jds[jj], ra)
-                az, alt = self._get_azalt(decs[ii], ha)
-                ha_array[ii, jj] = ha
-                error_array[ii, jj] = srcstats['error']
-                data_array[ii, jj] = srcstats[flux_type]
-                azalt_array[0, ii, jj] = az
-                azalt_array[1, ii, jj] = alt
+            for j, fn in enumerate(fitsfiles):
+                srcstats = et.get_flux(fn, ra, decs[i])
+                lst, ha = self._get_lstha(jds[j], ra)
+                az, alt = self._get_azalt(decs[i], ha)
+                ha_array[i, j] = ha
+                error_array[i, j] = srcstats['error']
+                data_array[i, j] = srcstats[flux_type]
+                azalt_array[0, i, j] = az
+                azalt_array[1, i, j] = alt
                 # saving to dictionary
-            srcdict[key]['data'] = data_array[ii,  :]
-            srcdict[key]['error'] = error_array[ii, :]
-            srcdict[key]['ha'] = ha_array[ii, :]
-            srcdict[key]['azalt'] = azalt_array[:, ii, :]
+            srcdict[key]['data'] = data_array[i,  :]
+            srcdict[key]['error'] = error_array[i, :]
+            srcdict[key]['ha'] = ha_array[i, :]
+            srcdict[key]['azalt'] = azalt_array[:, i, :]
         return srcdict
 
     def _srcdict_catdata(self, srcdict):
@@ -176,11 +191,11 @@ class catData(object):
         self.error_array = np.zeros((_sh0, _sh1, _sh2))
         self.ha_array = np.zeros((_sh1, _sh2))
         self.azalt_array= np.zeros((2, _sh1, _sh2))
-        for ii, key in enumerate(keys):
-            self.data_array[:, ii, :] = srcdict[key]['data']
-            self.error_array[:, ii, :] = srcdict[key]['error']
-            self.ha_array[ii, :] = srcdict[key]['ha']
-            self.azalt_array[:, ii, :] = srcdict[key]['azalt']
+        for i, key in enumerate(keys):
+            self.data_array[:, i, :] = srcdict[key]['data']
+            self.error_array[:, i, :] = srcdict[key]['error']
+            self.ha_array[i, :] = srcdict[key]['ha']
+            self.azalt_array[:, i, :] = srcdict[key]['azalt']
         self.Nsrcs = _sh1
         self.Nfits = _sh2
 
@@ -241,6 +256,22 @@ class catData(object):
         if return_data:
             return srcdict
 
+    def add_src(self, ras, decs, pols, fitsfiles_xx=None, fitsfiles_yy=None, flux_type='pflux'):
+        if not fitsfiles_xx is None:
+            assert len(fitsfiles_xx) == self.Nfits, "Number of fitsfiles is not consistent with Nfits."
+        if not fitsfiles_yy is None:
+            assert len(fitsfiles_yy) == self.Nfits, "Number of fitsfiles is not consistent with Nfits."
+        if not isinstance(pols, list): pols = list(pols)
+        assert len(pols) == len(self.pols), "Pols need to be consistent with self.pols"
+        data_array, error_array, azalt_array, ha_array, pos_array, nsrcs = self._getattrs()
+        self.gen_catalog(ras, decs, fitsfiles_xx=fitsfiles_xx, fitsfiles_yy=fitsfiles_yy, pols=pols, flux_type=flux_type)
+        self._set_attr('data_array', np.append(data_array, self.data_array, axis=1))
+        self._set_attr('error_array', np.append(error_array, self.error_array, axis=1))
+        self._set_attr('azalt_array', np.append(azalt_array, self.azalt_array, axis=1))
+        self._set_attr('ha_array', np.append(ha_array, self.ha_array, axis=0))
+        self._set_attr('pos_array', np.append(pos_array, self.pos_array, axis=0))
+        self._set_attr('Nsrcs', nsrcs + len(ras))
+
     def _get_npoints(self, dr):
         d_ha = self.ha_array[0, 0] - self.ha_array[0, -1]
         dn_ha = np.abs(d_ha) / dr
@@ -256,18 +287,18 @@ class catData(object):
         error_array = np.zeros((len(self.pols), self.Nsrcs, npoints))
         azalt_array = np.zeros((2, self.Nsrcs, npoints))
         ha_array = np.zeros((self.Nsrcs, npoints))
-        for ii in xrange(self.Nsrcs):
-            ha_array[ii, :] = np.linspace(np.min(self.ha_array[ii, :]), np.max(self.ha_array[ii, :]), npoints)
-            interp_azs, interp_alts = self._get_azalt(self.pos_array[ii][1], ha_array[ii, :])
-            azalt_array[0, ii, :] = interp_azs
-            azalt_array[1, ii, :] = interp_alts
+        for i in xrange(self.Nsrcs):
+            ha_array[i, :] = np.linspace(np.min(self.ha_array[i, :]), np.max(self.ha_array[i, :]), npoints)
+            interp_azs, interp_alts = self._get_azalt(self.pos_array[i][1], ha_array[i, :])
+            azalt_array[0, i, :] = interp_azs
+            azalt_array[1, i, :] = interp_alts
             #interpolating data
             for p in xrange(len(self.pols)):
-                    interp_func = self._interpolate_data(self.ha_array[ii, :], data[p, ii, :], kind=kind)
-                    data_array[p, ii, :] = interp_func(ha_array[ii, :])
+                    interp_func = self._interpolate_data(self.ha_array[i, :], data[p, i, :], kind=kind)
+                    data_array[p, i, :] = interp_func(ha_array[i, :])
             #interpolating error
-                    interp_func = self._interpolate_data(self.ha_array[ii, :], self.error_array[p, ii, :], kind=kind)
-                    error_array[p, ii, :] = interp_func(ha_array[ii, :])
+                    interp_func = self._interpolate_data(self.ha_array[i, :], self.error_array[p, i, :], kind=kind)
+                    error_array[p, i, :] = interp_func(ha_array[i, :])
                        
         self.data_array = data_array
         self.azalt_array = azalt_array

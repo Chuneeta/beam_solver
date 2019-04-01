@@ -122,6 +122,14 @@ class Test_catData():
         nt.assert_equal(len(srcdict.keys()), len(ras))
         np.testing.assert_almost_equal(srcdict.keys(), catd.pos_array)
         
+    def test_add_src(self):
+        catd = cd.catData()
+        catd.gen_catalog(ras[0:2], decs[0:2], [outfile])
+        catd.add_src(ras[2:3], decs[2:3], pols=['xx'], fitsfiles_xx=[outfile])
+        nt.assert_equal(catd.Nsrcs, 3)
+        nt.assert_equal(catd.data_array.shape, (1, 3, 1))
+        np.testing.assert_almost_equal(catd.pos_array[2], np.array([ras[2], decs[2]]), 2)        
+
     def test_get_npoints(self):
         catd = cd.catData()
         npix = 91
@@ -167,12 +175,6 @@ class Test_catData():
         nt.assert_equal(len(catd_copy.azalt_array[0, 0, :]), 9)
         nt.assert_equal(catd_copy.error_array.shape, catd_copy.data_array.shape) 
  
-    #def test_calc_error(self):
-    #    catd = cd.catData()
-    #    catd.gen_catalog(ras, decs, [outfile], return_data=True)
-    #    catd.calc_error([outfile], pol='xx')
-    #    nt.assert_equal(catd.err_array.shape, (1, 5, 1))
-
     def test_write_hdf5(self):
         catd = cd.catData()
         catd.gen_catalog(ras, decs, [outfile])
