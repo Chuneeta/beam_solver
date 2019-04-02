@@ -128,7 +128,6 @@ class BeamOnly():
         c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0,j], ps[p][1,j])), i, j): flux_wgts * ws[p][j] for p in xrange(4)}
         eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
             + '*b%d'%(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))  for p in xrange(4)])
-        #assert eq not in self.eqs, 'equation already exists.'
         if eq not in self.eqs:
             self.eqs[eq] = obs_flux / divisor
             self.consts.update(c)
@@ -346,6 +345,12 @@ class BeamCat(BeamOnly):
                         I_s = obs_vals[i, j]
                         if np.isnan(I_s) or I_s < flux_thresh: continue
                         self._mk_eq(ps, ws, I_s, catalog_flux[i], i, j, equal_wgts, **kwargs)
+
+    def add_constrain(self, srcid, val):
+        """
+        Add constrain to the flux value in the system of linear equations
+        """
+        self.eqs['I%d'%srcid] = val
 
     def _build_solver(self, norm_weight=100, **kwargs):
         """

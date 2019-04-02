@@ -326,6 +326,16 @@ class Test_BeamCat():
         eq_keys = bms.eqs.keys()
         nt.assert_almost_equal(bms.eqs[eq_keys[0]], 2.0)
 
+    def test_add_constrain(self):
+        fluxval = np.array([2.0])
+        catd = gen_catdata_zensrc(fluxval, sigma=2)
+        bms = bs.BeamCat(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux=fluxval, bvals=np.ones((31, 31)))
+        bms.add_constrain(0, 20)
+        keys = bms.eqs.keys()
+        nt.assert_equal(len(keys), 2)
+        nt.assert_equal(bms.eqs[keys[1]], 20)
+
     def test_build_solver(self):
         fluxval = np.array([2.0])
         catd = gen_catdata_zensrc(fluxval, sigma=2)
