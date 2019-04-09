@@ -212,6 +212,17 @@ class Test_catData():
         nt.assert_equal(catd.error_array.shape, (1, 4, 1))
         np.testing.assert_almost_equal(catd.pos_array, np.delete(pos_array, 0, 0))
 
+    def test_delete_multiple_srcs(self):
+        catd = cd.catData()
+        catd.gen_catalog(ras, decs, [outfile])
+        pos_array = catd.pos_array
+        catd.delete_src([(74.26, -52.02), (41.91, -43.23)])
+        nt.assert_equal(catd.Nsrcs, 3)
+        nt.assert_equal(catd.data_array.shape, (1, 3, 1))
+        nt.assert_equal(catd.ha_array.shape, (3, 1))
+        nt.assert_equal(catd.error_array.shape, (1, 3, 1))
+        np.testing.assert_almost_equal(catd.pos_array, np.delete(pos_array, [0, 1], 0))
+
     def test_delete_valueerror(self):
         catd = cd.catData()
         catd.gen_catalog(ras, decs, [outfile])
