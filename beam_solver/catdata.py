@@ -306,6 +306,24 @@ class catData(object):
         self.ha_array = ha_array
         self.Nfits = npoints
 
+    def delete_src(self, key):
+        """
+        Deletes sources given key. The key is in the form (ra, dec) in degrees.
+        The right ascension and declination values can be found in pos_array
+        key : tuple
+            Key should a tuple in the form of (ra, dec).
+        """
+        self.pos_array = np.array(self.pos_array)
+        ind = np.where(self.pos_array == [key])
+        if len(ind[0]) == 0:
+            raise ValueError('The given key could be not found.')
+        self.data_array = np.delete(self.data_array, ind[0], 1)
+        self.error_array = np.delete(self.error_array, ind[0], 1)
+        self.ha_array = np.delete(self.ha_array, ind[0], 0)
+        self.pos_array = np.delete(self.pos_array, ind[0], 0)
+        self.azalt_array = np.delete(self.azalt_array, ind[0], 1)
+        self.Nsrcs -= 1
+
     def write_hdf5(self, filename, clobber=False):
         """
         Writes catData object to HDF5 file (saves it on disk)

@@ -200,3 +200,19 @@ class Test_catData():
         beam = bt.get_fitsbeam(beamfits, 151e6)
         catalog_flux = catd.calc_catalog_flux(beam, 'xx')
         nt.assert_almost_equal(catalog_flux[2], 1.000, 3)
+
+    def test_delete_src(self):
+        catd = cd.catData()
+        catd.gen_catalog(ras, decs, [outfile])
+        pos_array = catd.pos_array
+        catd.delete_src((74.26, -52.02))
+        nt.assert_equal(catd.Nsrcs, 4)
+        nt.assert_equal(catd.data_array.shape, (1, 4, 1))
+        nt.assert_equal(catd.ha_array.shape, (4, 1))
+        nt.assert_equal(catd.error_array.shape, (1, 4, 1))
+        np.testing.assert_almost_equal(catd.pos_array, np.delete(pos_array, 0, 0))
+
+    def test_delete_valueerror(self):
+        catd = cd.catData()
+        catd.gen_catalog(ras, decs, [outfile])
+        nt.assert_raises(ValueError, catd.delete_src, (45.6, -30.45))
