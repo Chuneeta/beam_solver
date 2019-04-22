@@ -309,7 +309,10 @@ class BeamCat(BeamOnly):
             self.consts.update(c)
         for p in xrange(4):
             bpix = int(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))
-            self.sol_dict['b%d'%bpix] = bvals[bpix]
+            try:
+                self.sol_dict['b%d'%bpix] = bvals[bpix]
+            except IndexError:
+                print 'IndexError, skipping coordinates'
 
     def add_eqs(self, catalog_flux, theta=[0], flip=[1], polnum=0, flux_thresh=0, equal_wgts=True, **kwargs):
         """
