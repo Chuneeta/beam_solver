@@ -34,10 +34,8 @@ def deg2dms(dec):
     dec_m = int(dec_mins)
     dec_secs = (dec_mins - dec_m) * 60
     dec_s = round(dec_secs, 2)
-    if dec < 0 :
-        return '{}d{}m{}s'.format(-1 * dec_deg, dec_m, dec_s)
-    else:
-        return '{}d{}m{}s'.format(dec_deg, dec_m, dec_s)
+    sign = np.sign(dec)
+    return '{}d{}m{}s'.format(sign * dec_deg, dec_m, dec_s)
 
 def hms2deg(hms_str):
     """
