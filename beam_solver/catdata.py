@@ -121,6 +121,7 @@ class catData(object):
         ha : float 
             Hour angle in degrees.       
         """
+        ha[ha == 0.] = 1e-7
         az, alt = ct.hadec2azalt(dec * np.pi/180., ha)
         return az, alt
 
