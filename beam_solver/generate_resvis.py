@@ -2,7 +2,7 @@ from collections import OrderedDict
 import numpy as np
 import hera_cal as hc
 import pyuvdata
-import get_redbls as gr
+from beam_solver import get_redbls as gr
 import copy
 import pylab
 
