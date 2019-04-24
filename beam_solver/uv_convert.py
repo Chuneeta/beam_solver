@@ -1,5 +1,5 @@
 from astropy.time import Time
-import casa_utils as ct
+from import casa_utils as ct
 import pyuvdata
 import os
 
