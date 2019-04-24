@@ -49,7 +49,7 @@ def ms2uvfits(dset, outfile=None, script='ms2uvfits', overwrite=False, delete=Tr
     print ('Converting {} to {}'.format(dset, outfile))
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
     task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), fitsfile="'{}'".format(outfile), overwrite="{}".format(overwrite))
-    print 'task_opt:', task_opt
+    print ('task_opt:', task_opt)
     casawrapper.call_casa_task(task='exportuvfits', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
     
 def flag_antenna(dset, antenna, script='flag_a', delete=True):
@@ -196,7 +196,7 @@ def create_complist(infile, outfile='component.cl', script='create_cl', delete=F
     CASA Component with all the components
     """
     if os.path.exists(outfile):
-        print 'WARNING: overwritting existed file'
+        print ('WARNING: overwritting existed file')
         os.system('rm -rf {}'.format(outfile))
     stdout = open(script + '.py', 'wb')
     sources = numpy.loadtxt(infile, dtype='str', delimiter=':')
@@ -231,6 +231,18 @@ def ft(dset, complist=None, script='ft', delete=False):
     else:
         task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), complist="'{}'".format(complist ), usescratch=True)
     casawrapper.call_casa_task(task='ft', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete) 
+
+def writeto(dset, column_from, column_to, script='writeto', delete=False):
+    casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
+    task_opt = "ms = casac.table()\n"
+    task_opt += "ms.open('{}', nomodify=False)\n".format(dset)
+    task_opt += "if '{}' in ms.colnames():\n".format(column_from)
+    task_opt += "   mod_data = ms.getcol('MODEL_DATA')\n"
+    task_opt += "   ms.putcol('{}', mod_data)".format(column_to)
+    stdout = open(script + ".py", "w")
+    stdout.write(task_opt)
+    stdout.close()
+    casawrapper.call_casa_script(script + ".py", casa_opt, delete=delete)
 
 def subtract_model(dset, script='subtract_mod', delete=False):
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')

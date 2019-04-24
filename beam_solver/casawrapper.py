@@ -69,7 +69,7 @@ def call_casa_task(task, script, task_options={}, casa_options={}, delete=True, 
         casa_out += '--noipython '
     command = 'casa {} -c {}'.format(casa_out, scriptname)
     if verbose:
-        print 'CMD: {}'.format(command)
+        print ('CMD: {}'.format(command))
     os.system(command)
     if delete:  
         os.system('rm -r {}'.format(scriptname))        
@@ -94,7 +94,7 @@ def call_casa_script(scriptname, casa_opts='', delete=False, verbose=True):
         if casa_opts[key] == '0': call_opts += '--%s '%(key)    
     command = 'casa {} -c {}'.format(call_opts, scriptname)
     if verbose:
-        print "CMD:: ",command
+        print ("CMD:: ",command)
     os.system(command)
     if delete:
         os.system("rm -r " + scriptname)
