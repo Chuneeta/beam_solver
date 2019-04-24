@@ -1,5 +1,5 @@
 from astropy.time import Time
-from import casa_utils as ct
+from beam_solver import casa_utils as ct
 import pyuvdata
 import os
 
