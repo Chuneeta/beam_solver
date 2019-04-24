@@ -1,8 +1,8 @@
 import numpy
 import pylab
 import os, sys
-import casawrapper
-import coord_utils as cd
+from beam_solver import casawrapper
+from beam_solver import coord_utils as cd
 
 def uvfits2ms(uvfits, outfile=None, script='uvfits2ms', delete=True):
     """
