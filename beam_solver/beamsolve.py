@@ -352,7 +352,7 @@ class BeamCat(BeamOnly):
         """
         self.eqs['I%d'%srcid] = val
 
-    def _build_solver(self, norm_weight=100, **kwargs):
+    def _build_solver(self, norm_weight, **kwargs):
         """
         Builds linsolve solver
 
@@ -367,8 +367,8 @@ class BeamCat(BeamOnly):
             self.eqs['%d*b%d'%(norm_weight, self.unravel_pix(self.bm_pix, (int(self.bm_pix/2.), int(self.bm_pix/2.))))] = norm_weight
         self.ls = linsolve.LinProductSolver(self.eqs, sol0=self.sol_dict, **self.consts)
 
-    def solve(self, maxiter=50, conv_crit=1e-11, **kwargs):
-        self._build_solver(**kwargs)
+    def solve(self, maxiter=50, conv_crit=1e-11, norm_weight=100, **kwargs):
+        self._build_solver(norm_weight, **kwargs)
         sol = self.ls.solve_iteratively(maxiter=maxiter, conv_crit=conv_crit, verbose=True)
         return sol
 
@@ -471,7 +471,7 @@ class BeamCatCross(BeamCat):
         BeamCat.add_eqs(self, catalog_flux=catalog_flux_xx, theta=theta_xx, flip=flip_xx, polnum=0, equal_wgts=equal_wgts, **kwargs)
         BeamCat.add_eqs(self, catalog_flux=catalog_flux_yy, theta=theta_yy, flip=flip_yy, polnum=1, equal_wgts=equal_wgts, **kwargs)
 
-    def solve(self, maxiter=50, conv_crit=1e-11, **kwargs):
-        self._build_solver(**kwargs)
+    def solve(self, maxiter=50, conv_crit=1e-11, norm_weight=100, **kwargs):
+        self._build_solver(norm_weight = norm_weight, **kwargs)
         sol = self.ls.solve_iteratively(maxiter=maxiter, conv_crit=conv_crit, verbose=True)
         return sol

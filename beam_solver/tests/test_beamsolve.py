@@ -341,7 +341,7 @@ class Test_BeamCat():
         catd = gen_catdata_zensrc(fluxval, sigma=2)
         bms = bs.BeamCat(cat=catd, bm_pix=31)
         bms.add_eqs(catalog_flux=fluxval, bvals=np.ones((31, 31)))
-        bms._build_solver()
+        bms._build_solver(norm_weight=100)
         nt.assert_true(isinstance(bms.ls, linsolve.LinProductSolver))
 
     def test_sol_values(self):
@@ -434,7 +434,7 @@ class Test_BeamCatCross():
         catd.Npols = 2
         bms = bs.BeamCatCross(cat=catd, bm_pix=31)
         bms.add_eqs(catalog_flux_xx=fluxval, catalog_flux_yy=fluxval, theta_xx=[0], theta_yy=[np.pi/2], bvals=np.zeros((31, 31)))
-        sol = bms.solve()
+        sol = bms.solve(norm_weight=100)
         nt.assert_true(isinstance(bms.ls, linsolve.LinProductSolver))
 
     def test_solve_onesrc(self):
