@@ -365,7 +365,6 @@ class BeamCat(BeamOnly):
         # constraining the center pixel to be one
         if constrain:	
             self.eqs['%d*b%d'%(norm_weight, self.unravel_pix(self.bm_pix, (int(self.bm_pix/2.), int(self.bm_pix/2.))))] = norm_weight
-            print '%d*b%d'%(norm_weight, self.unravel_pix(self.bm_pix, (int(self.bm_pix/2.), int(self.bm_pix/2.))))
         self.ls = linsolve.LinProductSolver(self.eqs, sol0=self.sol_dict, **self.consts)
 
     def solve(self, maxiter=50, conv_crit=1e-11, norm_weight=100, **kwargs):
