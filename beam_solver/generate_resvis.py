@@ -110,7 +110,7 @@ def generate_residual(uvfile, uvfits, omni_calfits, abs_calfits, pol, outfile=No
     #aa = hc.utils.get_aa_from_uv(uvd)
     #info = hc.omni.aa_to_info(aa)
     pos_dict = generate_antdict(uvd)
-    red_bls = hc.redcal.get_reds(pos_dict)
+    red_bls = hc.redcal.get_reds(pos_dict, pols=[pol])
     #red_bls = np.array(info.get_reds())
     red = gr.RBL(red_bls)
 
