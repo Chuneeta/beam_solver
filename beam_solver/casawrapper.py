@@ -35,6 +35,7 @@ def call_casa_task(task, script, task_options={}, casa_options={}, delete=True, 
     for key in task_options.keys():
         line += '{}={}\n'.format(key, task_options[key])
     line += 'go()'
+    line = line.encode() # converting to bytes
     stdout.write(line)
     stdout.close()
     # casa otpions

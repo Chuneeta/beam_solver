@@ -180,7 +180,8 @@ def generate_complist_input(ras, decs, fluxs, sindex, freqs, flux_unit='Jy', fre
     for ii, ra in enumerate(ras):
         ra_str = cd.deg2hms(ra)
         dec_str = cd.deg2dms(decs[ii])
-        stdout.write('J2000 {} {}: {}: {}: {}\n'.format(ra_str, dec_str, fluxs[ii], sindex[ii], freqs[ii]))
+        text = ('J2000 {} {}: {}: {}: {}\n'.format(ra_str, dec_str, fluxs[ii], sindex[ii], freqs[ii])).encode()
+        stdout.write(text)
     stdout.close()    
     return output
 
@@ -203,9 +204,10 @@ def create_complist(infile, outfile='component.cl', script='create_cl', delete=F
     if sources.ndim == 1: sources = sources.reshape((1, len(sources)))
     for src in sources:
         task_opt = "dir='{}', flux={}, fluxunit='Jy', shape='point', spectrumtype='spectral index', index={}, freq='{}MHz'".format(src[0], float(src[1]), float(src[2]), float(src[3])) 
-        stdout.write('cl.addcomponent({})\n'.format(task_opt))    
-    stdout.write("cl.rename('{}')\n".format(outfile))
-    stdout.write('cl.close()')
+        text = ('cl.addcomponent({})\n'.format(task_opt)).encode()
+        stdout.write(text)    
+    text = ("cl.rename('{}')\ncl.close()".format(outfile)).encode()
+    stdout.write(text)
     stdout.close()
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
     casawrapper.call_casa_script(script + '.py', casa_opts=casa_opt, delete=delete)
@@ -254,4 +256,4 @@ def subtract_model(dset, script='subtract_mod', delete=False):
     stdout = open(script + ".py", "w")
     stdout.write(task_opt)
     stdout.close()
-    casawrapper.call_casa_script(script + ".py", casa_opt, delete=delete )
+    casawrapper.call_casa_script(script + ".py", casa_opt, delete=delete)

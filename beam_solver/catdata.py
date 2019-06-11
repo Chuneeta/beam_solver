@@ -181,7 +181,7 @@ class catData(object):
             Dictionary containing the data and metadata about the astronomical sources.
         """ 
         # saving attributes to object
-        keys = srcdict.keys()
+        keys = list(srcdict.keys())
         self.pos_array = keys
         _sh1 = len(keys)
         _sh = srcdict[keys[0]]['data'].shape
@@ -209,8 +209,8 @@ class catData(object):
         srcdict_yy: dict
             Dictionary containing data and metadata for yy polarization.
         """
-        keys_xx = srcdict_xx.keys()
-        keys_yy = srcdict_yy.keys()
+        keys_xx = list(srcdict_xx.keys())
+        keys_yy = list(srcdict_yy.keys())
         srcdict = copy.deepcopy(srcdict_xx)
         assert keys_xx == keys_yy, "both dictionary should have the same keywords."
         for key in keys_xx:
@@ -289,13 +289,13 @@ class catData(object):
         error_array = np.zeros((len(self.pols), self.Nsrcs, npoints))
         azalt_array = np.zeros((2, self.Nsrcs, npoints))
         ha_array = np.zeros((self.Nsrcs, npoints))
-        for i in xrange(self.Nsrcs):
+        for i in range(self.Nsrcs):
             ha_array[i, :] = np.linspace(np.min(self.ha_array[i, :]), np.max(self.ha_array[i, :]), npoints)
             interp_azs, interp_alts = self._get_azalt(self.pos_array[i][1], ha_array[i, :])
             azalt_array[0, i, :] = interp_azs
             azalt_array[1, i, :] = interp_alts
             #interpolating data
-            for p in xrange(len(self.pols)):
+            for p in range(len(self.pols)):
                     interp_func = self._interpolate_data(self.ha_array[i, :], data[p, i, :], kind=kind)
                     data_array[p, i, :] = interp_func(ha_array[i, :])
             #interpolating error
@@ -349,7 +349,7 @@ class catData(object):
             mgp = f.create_group('Metadata')
             mgp['Nfits'] = self.Nfits
             mgp['Nsrcs'] = self.Nsrcs
-            mgp['pols'] = self.pols
+            mgp['pols'] = np.string_(self.pols)
             mgp['ha_array'] = self.ha_array
             mgp['error_array'] = self.error_array
             mgp['pos_array'] = self.pos_array

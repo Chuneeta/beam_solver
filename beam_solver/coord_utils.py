@@ -21,7 +21,7 @@ def deg2hms(ra):
     ra_m = int(ra_mins)
     ra_secs = (ra_mins - ra_m) * 60
     ra_s = round(ra_secs, 2) 
-    return '{}h{}m{}s'.format(ra_h, ra_m, ra_s)
+    return '{}h{}m{:.1f}s'.format(ra_h, ra_m, ra_s)
 
 def deg2dms(dec):
     """
@@ -35,14 +35,14 @@ def deg2dms(dec):
     dec_secs = (dec_mins - dec_m) * 60
     dec_s = round(dec_secs, 2)
     sign = np.sign(dec)
-    return '{}d{}m{}s'.format(int(sign * dec_deg), dec_m, dec_s)
+    return '{}d{}m{:.1f}s'.format(int(sign * dec_deg), dec_m, dec_s)
 
 def hms2deg(hms_str):
     """
     Converts hours minutes seconds to degrees
     hms_str : string specifying hours minutes seconds in the format hrs:min:sec
     """
-    str_splt = map(float, hms_str.split(':'))
+    str_splt = np.array(hms_str.split(':'), dtype=float)
     assert str_splt[0] >= 0, "hours needs to be positive quantity"
     assert str_splt[1] >= 0, "minutes needs to be positive quantity"
     assert str_splt[2] >= 0, "seconds needs to be positive quantity"
@@ -55,7 +55,7 @@ def dms2deg(dms_str):
     Converts degrees minutes seconds to degrees
     dms_str: dtring specifying degrees minutes and seconds in the format deg:min:sec
     """
-    str_splt = map(float, dms_str.split(':'))
+    str_splt = np.array(dms_str.split(':'), dtype=float)
     deg = np.abs(str_splt[0]) + str_splt[1]/60. + str_splt[2]/3600.
     if str_splt[0] < 0:
         multiply = -1

@@ -113,7 +113,7 @@ class Test_BeamOnly():
         mat0 = np.array([[np.cos(theta), -1 * np.sin(theta)], [np.sin(theta), np.cos(theta)]])
         mat = bms.rotate_mat(theta)
         np.testing.assert_almost_equal(mat, mat0)
-    	theta = 2 * np.pi
+        theta = 2 * np.pi
         mat0 = np.array([[np.cos(theta), -1 * np.sin(theta)], [np.sin(theta), np.cos(theta)]])
         mat = np.array([[1., 0.], [0., 1.]])
         np.testing.assert_almost_equal(mat, mat0)

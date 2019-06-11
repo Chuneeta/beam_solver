@@ -66,7 +66,7 @@ class Test_catData():
     def test_generate_srcdict(self):
         catd = cd.catData()
         srcdict = catd._generate_srcdict(ras, decs, [outfile], flux_type='pflux')
-        keys = srcdict.keys()
+        keys = list(srcdict.keys())
         nt.assert_equal(len(keys), len(ras))
         data = srcdict[keys[0]]['data']
         nt.assert_equal(data.shape, (1,))
@@ -77,7 +77,7 @@ class Test_catData():
         srcdict = catd._generate_srcdict(ras, decs, [outfile], flux_type='gauss_pflux')
         catd._srcdict_catdata(srcdict)
         nt.assert_equal(catd.data_array.shape, (1, len(ras), 1))
-        np.testing.assert_almost_equal(catd.pos_array, srcdict.keys())
+        np.testing.assert_almost_equal(catd.pos_array, list(srcdict.keys()))
 
     def test_combine_srcdict(self):
         catd1 = cd.catData()
@@ -86,7 +86,7 @@ class Test_catData():
         srcdict2 = catd2._generate_srcdict(ras, decs, [outfile], flux_type='pflux')
         catd = cd.catData()
         srcdict = catd._combine_srcdict(srcdict1, srcdict2)
-        keys = srcdict.keys()
+        keys = list(srcdict.keys())
         data = srcdict[keys[0]]['data']
         nt.assert_equal(data.shape, (2, 1))
         np.testing.assert_almost_equal(data, np.array([[0.75], [0.75]]))
@@ -120,7 +120,7 @@ class Test_catData():
         catd = cd.catData()
         srcdict = catd.gen_catalog(ras, decs, [outfile], return_data=True)
         nt.assert_equal(len(srcdict.keys()), len(ras))
-        np.testing.assert_almost_equal(srcdict.keys(), catd.pos_array)
+        np.testing.assert_almost_equal(list(srcdict.keys()), catd.pos_array)
         
     def test_add_src(self):
         catd = cd.catData()
