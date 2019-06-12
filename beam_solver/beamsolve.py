@@ -124,10 +124,10 @@ class BeamOnly():
         else:
             flux_wgts = catalog_flux
             divisor = 1
-        i = srcid; j = timeid
-        c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0,j], ps[p][1,j])), i, j): flux_wgts * ws[p][j] for p in xrange(4)}
+        i = srcid; j = timed
+        c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0,j], ps[p][1,j])), i, j): flux_wgts * ws[p][j] for p in range(4)}
         eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
-            + '*b%d'%(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))  for p in xrange(4)])
+            + '*b%d'%(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))  for p in range(4)])
         if eq not in self.eqs:
             self.eqs[eq] = obs_flux / divisor
             self.consts.update(c)
@@ -198,8 +198,8 @@ class BeamOnly():
         cutoff_mode = np.where(var_exp < threshold)[0][0]
         print ('Removing all eigen modes above {}'.format(cutoff_mode))
 
-        for i in xrange(cutoff_mode, len(S)):
-            emode = np.array([U[ls.prm_order['%s%d' % (key, px)], i] if ls.prm_order.has_key('%s%d'% (key, px)) else 0 for px in xrange(self.bm_pix**2)])
+        for i in range(cutoff_mode, len(S)):
+            emode = np.array([U[ls.prm_order['%s%d' % (key, px)], i] if '%s%d'% (key, px) in ls.prm_order.keys() else 0 for px in range(self.bm_pix**2)])
             emode.shape = (self.bm_pix, self.bm_pix)
             obsbeam -= np.sum(obsbeam * emode) * emode.conj()
 
@@ -229,11 +229,11 @@ class BeamOnly():
         nsrcs = self.cat.Nsrcs
 
         obs_vals = self.cat.data_array[polnum]
-        for i in xrange(nsrcs):
+        for i in range(nsrcs):
             for th in theta:
                 for fl in flip:
                     ps, ws = self.get_weights(self.cat.azalt_array[:, i, :], th, fl)
-                    for j in xrange(nfits):
+                    for j in range(nfits):
                         I_s = obs_vals[i, j]
                         if np.isnan(I_s) or I_s < flux_thresh:continue
                         self._mk_eq(ps, ws, I_s, catalog_flux[i], i, j, equal_wgts, **kwargs)
@@ -296,18 +296,18 @@ class BeamCat(BeamOnly):
         bvals = kwargs['bvals'].flatten()
         self.sol_dict['I%d'%i] = catalog_flux
         c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0,j], ps[p][1,j])), i, j): ws[p][j]
-                    for p in xrange(4)}
+                    for p in range(4)}
         if equal_wgts:
             eq1 = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
-            + '*b%d'% (self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))) for p in xrange(4)])
+            + '*b%d'% (self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))) for p in range(4)])
             eq = 'I%d * (%s)'%(i, eq1)
         else:
             eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
-                + '*b%d'% (self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))) + '*I%d'%i for p in xrange(4)])
+                + '*b%d'% (self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))) + '*I%d'%i for p in range(4)])
         if eq not in self.eqs:
             self.eqs[eq] = obs_flux
             self.consts.update(c)
-        for p in xrange(4):
+        for p in range(4):
             bpix = int(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))
             self.sol_dict['b%d'%bpix] = bvals[bpix]
 
@@ -337,11 +337,11 @@ class BeamCat(BeamOnly):
 
         obs_vals = self.cat.data_array[polnum]
  
-        for i in xrange(nsrcs):
+        for i in range(nsrcs):
             for th in theta:
                 for fl in flip:
                     ps, ws = self.get_weights(self.cat.azalt_array[:, i, :], th, fl)
-                    for j in xrange(nfits):
+                    for j in range(nfits):
                         I_s = obs_vals[i, j]
                         if np.isnan(I_s) or I_s < flux_thresh: continue
                         self._mk_eq(ps, ws, I_s, catalog_flux[i], i, j, equal_wgts, **kwargs)
