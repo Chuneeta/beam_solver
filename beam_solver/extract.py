@@ -45,8 +45,10 @@ def get_flux(fitsfile, ra, dec):
         R = np.sqrt((ll - ra_pix)**2 + (mm - dec_pix)**2)
         select = R < 2 * bm_radius_px
         imdata_select = imdata[select]
-        peakval = np.nanmax(imdata_select)
+        maxval = np.nanmax(imdata_select)
         minval = np.nanmin(imdata_select)
+        # allowing to take care of negative components
+        peakval = minval if np.abs(minval) > np.abs(maxval) else maxval
         # fitting gaussian to point sources
         gauss_data = copy.deepcopy(imdata)
         gauss_data[~select] = 0            
