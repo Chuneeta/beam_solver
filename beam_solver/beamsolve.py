@@ -124,7 +124,7 @@ class BeamOnly():
         else:
             flux_wgts = catalog_flux
             divisor = 1
-        i = srcid; j = timed
+        i = srcid; j = timeid
         c = {self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0,j], ps[p][1,j])), i, j): flux_wgts * ws[p][j] for p in range(4)}
         eq = ' + '.join([self._mk_key(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])), i, j)
             + '*b%d'%(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))  for p in range(4)])
