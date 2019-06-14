@@ -22,7 +22,7 @@ def test_gain_flags():
     gains, gain_flags = gr.read_calfits(calfits)
     nt.assert_true(isinstance(gain_flags, collections.OrderedDict))
     nt.assert_true(gain_flags.keys(), 2)
-    keys = gain_flags.keys()
+    keys = list(gain_flags.keys())
     nt.assert_true(gain_flags[keys[0]].dtype, 'bool')
 
 def test_read_uvfits():
