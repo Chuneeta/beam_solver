@@ -129,7 +129,6 @@ class Test_catData():
         nt.assert_equal(catd.Nsrcs, 3)
         nt.assert_equal(catd.data_array.shape, (1, 3, 1))
         np.testing.assert_almost_equal(catd.pos_array[2], np.array([ras[2], decs[2]]), 2)        
-
     def test_get_npoints(self):
         catd = cd.catData()
         npix = 91
@@ -153,22 +152,22 @@ class Test_catData():
         catd = cd.catData()
         x = np.arange(0, 5)
         y = np.array([0., 0.5, 1., 1.5, 2.])
-        f = catd._interpolate_data(x, y, kind='linear')
+        f = catd._interpolate_data(x, y, kind='linear', bounds_error=False)
         nt.assert_equal(f(0), 0.)        
         np.testing.assert_almost_equal(f(np.array([0, 1.5])), np.array([0., 0.75]))
         y = np.array([0., 0.5, 1., -0.55, -0.1])
-        f = catd._interpolate_data(x, y, kind='cubic')
+        f = catd._interpolate_data(x, y, kind='cubic', bounds_error=False)
         nt.assert_true( -0.55 < f(np.array([2.5])) < 1.)
 
     def test_interpolate_catalog(self):
-        data = np.array([[[0., 0.5, 1., 1.5, 2.]]])
+        data = np.array([[[0.1, 0.5, 1., 1.5, 2.]]])
         ha = np.array([[-np.pi/2, -np.pi/4, 0, np.pi/4, np.pi/2]])
         error = np.array([[[0.01, 0.02, 0.01, 0.025, 0.05]]])
         catd = create_catdata(data, ha, 1, 5, error=error)
         catd.pos_array = np.array([(30.01, -30.43)])
         catd_copy = copy.deepcopy(catd) 
         catd_copy.interpolate_catalog(dha = np.pi/8)
-        f = catd._interpolate_data(ha[0, :], catd.data_array[0, 0, :], kind='cubic')        
+        f = catd._interpolate_data(ha[0, :], catd.data_array[0, 0, :], kind='cubic', bounds_error=False)        
         np.testing.assert_almost_equal(catd_copy.ha_array[0, :], np.linspace(-np.pi/2, np.pi/2, 9))
         np.testing.assert_almost_equal(catd_copy.data_array[0, 0, :], f(np.linspace(-np.pi/2, np.pi/2, 9)))
         nt.assert_equal(catd_copy.Nfits, 9)

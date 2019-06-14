@@ -279,10 +279,10 @@ class catData(object):
         dn_ha = np.abs(d_ha) / dr
         return int(dn_ha) + 1
 
-    def _interpolate_data(self, x, y, kind):
-        return interpolate.interp1d(x.compress(~np.isnan(y)), y.compress(~np.isnan(y)), kind=kind, bounds_error=False)
+    def _interpolate_data(self, x, y, kind, bounds_error):
+        return interpolate.interp1d(x.compress(~np.isnan(y)), y.compress(~np.isnan(y)), kind=kind, bounds_error=bounds_error)
  
-    def interpolate_catalog(self, dha=0.01, kind='cubic'):
+    def interpolate_catalog(self, dha=0.01, kind='cubic', bounds_error=False):
         data = self.data_array
         npoints = self._get_npoints(dha)
         data_array = np.zeros((len(self.pols), self.Nsrcs, npoints))
@@ -290,18 +290,23 @@ class catData(object):
         azalt_array = np.zeros((2, self.Nsrcs, npoints))
         ha_array = np.zeros((self.Nsrcs, npoints))
         for i in range(self.Nsrcs):
-            ha_array[i, :] = np.linspace(np.min(self.ha_array[i, :]), np.max(self.ha_array[i, :]), npoints)
-            interp_azs, interp_alts = self._get_azalt(self.pos_array[i][1], ha_array[i, :])
-            azalt_array[0, i, :] = interp_azs
-            azalt_array[1, i, :] = interp_alts
-            #interpolating data
             for p in range(len(self.pols)):
-                    interp_func = self._interpolate_data(self.ha_array[i, :], data[p, i, :], kind=kind)
-                    data_array[p, i, :] = interp_func(ha_array[i, :])
-            #interpolating error
-                    interp_func = self._interpolate_data(self.ha_array[i, :], self.error_array[p, i, :], kind=kind)
-                    error_array[p, i, :] = interp_func(ha_array[i, :])
-                       
+                # discarding data points with zero to avoid jump in the interpolation
+                ind0 = np.where(self.data_array[p, i, :] > 0)
+                data = self.data_array[p, i, :][ind0]
+                error = self.error_array[p, i, :][ind0]
+                ha = self.ha_array[i, :][ind0]
+                ha_array[i, :] = np.linspace(np.min(ha), np.max(ha), npoints)
+                interp_azs, interp_alts = self._get_azalt(self.pos_array[i][1], ha_array[i, :])
+                azalt_array[0, i, :] = interp_azs
+                azalt_array[1, i, :] = interp_alts
+                # interpolating data
+                interp_func = self._interpolate_data(ha, data, kind=kind, bounds_error=bounds_error)
+                data_array[p, i, :] = interp_func(ha_array[i, :])
+                #interpolating error
+                interp_func = self._interpolate_data(ha, error, kind=kind, bounds_error=bounds_error)
+                error_array[p, i, :] = interp_func(ha_array[i, :])
+    
         self.data_array = data_array
         self.azalt_array = azalt_array
         self.error_array = error_array
