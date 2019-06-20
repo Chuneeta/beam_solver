@@ -6,7 +6,6 @@ import nose.tools as nt
 import pyuvdata
 import collections
 
-print(DATA_PATH)
 def test_read_uvfile():
     uvfile = os.path.join(DATA_PATH,  'zen.2458098.44615.xx.HH.uvc')
     uvd = gr.read_uvfile(uvfile)
