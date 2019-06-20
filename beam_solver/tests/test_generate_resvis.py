@@ -6,6 +6,7 @@ import nose.tools as nt
 import pyuvdata
 import collections
 
+print(DATA_PATH)
 def test_read_uvfile():
     uvfile = os.path.join(DATA_PATH,  'zen.2458098.44615.xx.HH.uvc')
     uvd = gr.read_uvfile(uvfile)
@@ -43,7 +44,7 @@ def test_generate_residual():
     omni_calfits = os.path.join(DATA_PATH,  'zen.2458098.44615.HH.uv.com.calfits')
     abs_calfits = os.path.join(DATA_PATH,  'zen.2458098.44615.HH.xx.uv.abs.com.calfits')
     uvfits = os.path.join(DATA_PATH, 'zen.2458098.44615.HH.uv.com.uvfits')
-    outfile = '/Users/Ridhima/Documents/ucb_projects/beam_characterization/beam_solver/beam_solver/data/resfile.uv'
+    outfile = os.path.join(DATA_PATH, 'resfile.uv')
     gr.generate_residual(uvfile, uvfits, omni_calfits, abs_calfits, 'xx', outfile=outfile, clobber=True)
     nt.assert_true(os.path.exists(outfile))
     os.system('rm -rf {}'.format(outfile))

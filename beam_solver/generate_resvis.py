@@ -103,6 +103,7 @@ def generate_residual(uvfile, uvfits, omni_calfits, abs_calfits, pol, outfile=No
         If True, overwrites the existing file by the new one.
         Default is False
     """
+    print('inside gr')
     uvd = read_uvfile(uvfile)
     data = uvd.data_array
     flag = uvd.flag_array
@@ -136,8 +137,10 @@ def generate_residual(uvfile, uvfits, omni_calfits, abs_calfits, pol, outfile=No
                     mod_data /=  abs_gains[bl[0], 'J{}'.format(pol)]  *  np.conj(abs_gains[bl[1], 'J{}'.format(pol)])
                     mod_data *= ~uvd.get_flags(bl)
                     data_bl = uvd.get_data(bl) * ~uvd.get_flags(bl)
-                    residual = data_bl - mod_data                    
+                    residual = data_bl - mod_data
                     res_data[inds, :, :, :] = residual.reshape((_sh1, 1, _sh2, 1))
+                    flag_data[inds, :, :, :] = np.logical_or(uvf.get_flags(mbl).reshape(_sh1, 1, _sh2, 1), uvd.get_flags(mbl).reshape(_sh1, 1, _sh2, 1)
+
                 except KeyError:
                     flag_data[inds, :, :, :] = True
                     res_data[inds, :, :, :] = 0 + 0j
