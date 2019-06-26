@@ -253,6 +253,7 @@ def subtract_model(dset, script='subtract_mod', delete=False):
     task_opt += "if 'MODEL_DATA' in ms.colnames():\n"
     task_opt += "   data = ms.getcol('CORRECTED_DATA') if 'CORRECTED_DATA' in ms.colnames() else ms.getcol('DATA')\n"
     task_opt += "   ms.putcol('DATA', data - ms.getcol('MODEL_DATA'))\n"
+    task_opt += "   ms.close()"
     stdout = open(script + ".py", "w")
     stdout.write(task_opt)
     stdout.close()

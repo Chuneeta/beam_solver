@@ -49,11 +49,12 @@ def get_flux(fitsfile, ra, dec):
         minval = np.nanmin(imdata_select)
         # allowing to take care of negative components
         peakval = minval if np.abs(minval) > np.abs(maxval) else maxval
+        std = np.nanstd(imdata[select_err])
+        inds = np.where(imdata == peakval)
         # fitting gaussian to point sources
         gauss_data = copy.deepcopy(imdata)
         gauss_data[~select] = 0            
         gauss_data = gauss_data.reshape((nxaxis, nyaxis))
-        inds = np.unravel_index(np.argmax(gauss_data), (nxaxis, nyaxis))
         mod = models.Gaussian2D(peakval, inds[1], inds[0], bmaj_px/2, bmin_px/2, theta=bpa * np.pi/180)
         fit_p = fitting.LevMarLSQFitter()
         with warnings.catch_warnings():
@@ -62,11 +63,14 @@ def get_flux(fitsfile, ra, dec):
             gauss_mod = fit_p(mod, ll, mm, gauss_data)
         gauss_peak = gauss_mod.amplitude.value
         fitted_data = gauss_mod(ll, mm)
-        residual = gauss_data - fitted_data
+        select_err = R < 4 * bm_radius_px
+        err_data = copy.deepcopy(imdata)
+        err_data[~select_err] = 0
+        residual = imdata - fitted_data
         gauss_int = np.sum(fitted_data) / bm_npx
-        gauss_err = np.std(residual[select])
-        peak_flux, int_flux, gauss_err = gauss_peak, gauss_int, gauss_err
+        gauss_err = np.std(residual[select_err])
+        peak_flux, int_flux, gauss_err, std = gauss_peak, gauss_int, gauss_err, std
     else:
         warnings.warn('WARNING: Right ascension or declination outside image field, therefore values are set to nan', Warning)
-        peakval, peak_flux, int_flux, gauss_err = np.nan, np.nan, np.nan, np.nan
-    return {'freq': freq, 'pflux': peakval, 'gauss_pflux': peak_flux, 'gauss_tflux':int_flux, 'error': gauss_err}
+        peakval, peak_flux, int_flux, gauss_err, std = np.nan, np.nan, np.nan, np.nan, np.nan
+    return {'freq': freq, 'pflux': peakval, 'gauss_pflux': peak_flux, 'gauss_tflux':int_flux, 'error': gauss_err, 'std':std}
