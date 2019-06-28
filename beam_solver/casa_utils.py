@@ -234,13 +234,41 @@ def ft(dset, complist=None, script='ft', delete=False):
         task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), complist="'{}'".format(complist ), usescratch=True)
     casawrapper.call_casa_task(task='ft', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete) 
 
-def writeto(dset, column_from, column_to, script='writeto', delete=False):
+def read_col(dset, column, outfile='data', script='read_col', delete=False):
+    casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
+    task_opt = "ms = casac.table()\n"
+    task_opt += "ms.open('{}', nomodify=False)\n".format(dset)
+    task_opt += "if '{}' in ms.colnames():\n".format(column)
+    task_opt += "   data = ms.getcol('{}')\n".format(column)
+    task_opt += "ms.close()\n"
+    task_opt += "import numpy as np\n"
+    task_opt += "np.save('{}', data)".format(outfile)
+    stdout = open(script + ".py", "w")
+    stdout.write(task_opt)
+    stdout.close()
+    casawrapper.call_casa_script(script + ".py", casa_opt, delete=delete)
+
+def writeto(dset, data_array, column_to, script='writeto', delete=False):
+    casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
+    task_opt = "ms = casac.table()\n"
+    task_opt += "ms.open('{}', nomodify=False)\n".format(dset)
+    task_opt += "if '{}' in ms.colnames():\n".format(column_to)
+    task_opt += "   ms.putcol('{}', {})\n".format(column_to, data_array)
+    task_opt += "ms.close()"
+    stdout = open(script + ".py", "w")
+    stdout.write(task_opt)
+    stdout.close()
+    casawrapper.call_casa_script(script + ".py", casa_opt, delete=delete)
+
+def transferto(dset, column_from, column_to, script='transferto', delete=False):
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
     task_opt = "ms = casac.table()\n"
     task_opt += "ms.open('{}', nomodify=False)\n".format(dset)
     task_opt += "if '{}' in ms.colnames():\n".format(column_from)
-    task_opt += "   mod_data = ms.getcol('MODEL_DATA')\n"
-    task_opt += "   ms.putcol('{}', mod_data)".format(column_to)
+    task_opt += "   data_array = ms.getcol('{}')\n".format(column_from)
+    task_opt += "if '{}' in ms.colnames():\n".format(column_to)
+    task_opt += "   ms.putcol('{}', data_array)\n".format(column_to)
+    task_opt += "ms.close()"
     stdout = open(script + ".py", "w")
     stdout.write(task_opt)
     stdout.close()
@@ -253,7 +281,7 @@ def subtract_model(dset, script='subtract_mod', delete=False):
     task_opt += "if 'MODEL_DATA' in ms.colnames():\n"
     task_opt += "   data = ms.getcol('CORRECTED_DATA') if 'CORRECTED_DATA' in ms.colnames() else ms.getcol('DATA')\n"
     task_opt += "   ms.putcol('DATA', data - ms.getcol('MODEL_DATA'))\n"
-    task_opt += "   ms.close()"
+    task_opt += "ms.close()"
     stdout = open(script + ".py", "w")
     stdout.write(task_opt)
     stdout.close()
