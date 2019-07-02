@@ -49,18 +49,23 @@ def get_flux(fitsfile, ra, dec):
         minval = np.nanmin(imdata_select)
         # allowing to take care of negative components
         peakval = minval if np.abs(minval) > np.abs(maxval) else maxval
-        std = np.nanstd(imdata[select_err])
-        inds = np.where(imdata == peakval)
+        std = np.nanstd(imdata[select])
         # fitting gaussian to point sources
         gauss_data = copy.deepcopy(imdata)
         gauss_data[~select] = 0            
         gauss_data = gauss_data.reshape((nxaxis, nyaxis))
+        inds = np.where(gauss_data == peakval)
         mod = models.Gaussian2D(peakval, inds[1], inds[0], bmaj_px/2, bmin_px/2, theta=bpa * np.pi/180)
         fit_p = fitting.LevMarLSQFitter()
         with warnings.catch_warnings():
             # Ignore model linearity warning from the fitter
             warnings.simplefilter('ignore')
-            gauss_mod = fit_p(mod, ll, mm, gauss_data)
+            try:
+                mod = models.Gaussian2D(peakval, inds[1], inds[0], bmaj_px/2, bmin_px/2, theta=bpa * np.pi/180)
+                gauss_mod = fit_p(mod, ll, mm, gauss_data)
+            except ValueError:
+                mod = models.Gaussian2D(peakval, inds[0][1], inds[0][0], bmaj_px/2, bmin_px/2, theta=bpa * np.pi/180)
+                gauss_mod = fit_p(mod, ll, mm, gauss_data)
         gauss_peak = gauss_mod.amplitude.value
         fitted_data = gauss_mod(ll, mm)
         select_err = R < 4 * bm_radius_px
