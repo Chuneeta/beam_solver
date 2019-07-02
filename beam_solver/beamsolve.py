@@ -15,6 +15,7 @@ class BeamOnly():
         self.eqs = OrderedDict()
         self.consts = OrderedDict()
         self.sol_dict = OrderedDict()
+        self.diag_noise = []
         self.ls = None
 
     def _mk_key(self, pixel, srcid, timeid):
@@ -157,6 +158,12 @@ class BeamOnly():
         """
         return ls.get_A()
 
+    def get_noise_matrix(self):
+        noise_n = len(self.diag_noise)
+        noise_array = np.zeros((noise_n, noise_n))
+        np.fill_diagonal(noise_array, self.diag_noise)
+        return noise_array
+
     def svd(self, ls, A):
         """
         Decomposes m x n matrix through single value decomposition
@@ -229,6 +236,7 @@ class BeamOnly():
         nsrcs = self.cat.Nsrcs
 
         obs_vals = self.cat.data_array[polnum]
+        err_vals = self.cat.error_array[polnum]
         for i in range(nsrcs):
             for th in theta:
                 for fl in flip:
@@ -237,6 +245,7 @@ class BeamOnly():
                         I_s = obs_vals[i, j]
                         if np.isnan(I_s) or I_s < flux_thresh:continue
                         self._mk_eq(ps, ws, I_s, catalog_flux[i], i, j, equal_wgts, **kwargs)
+                        self.diag_noise.append(err_vals[i, j])
 
     def solve(self, **kwargs):
         """
@@ -336,7 +345,7 @@ class BeamCat(BeamOnly):
         nsrcs = self.cat.Nsrcs
 
         obs_vals = self.cat.data_array[polnum]
- 
+        err_vals = self.cat.error_array[polnum] 
         for i in range(nsrcs):
             for th in theta:
                 for fl in flip:
@@ -345,6 +354,7 @@ class BeamCat(BeamOnly):
                         I_s = obs_vals[i, j]
                         if np.isnan(I_s) or I_s < flux_thresh: continue
                         self._mk_eq(ps, ws, I_s, catalog_flux[i], i, j, equal_wgts, **kwargs)
+                        self.diag_noise.append(err_vals[i, j])
 
     def add_constrain(self, srcid, val):
         """
@@ -380,7 +390,6 @@ class BeamCat(BeamOnly):
         sol : dict
             Dictionary containing the solutions, returned by the solver.
         """
-
         obs_beam = BeamOnly(cat=self.cat, bm_pix=self.bm_pix).eval_sol(sol[1])
         fluxvals = np.zeros((2, self.cat.Nsrcs))
         k = 0
