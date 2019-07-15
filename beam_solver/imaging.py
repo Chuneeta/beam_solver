@@ -26,7 +26,7 @@ class Imaging(object):
         """
         ct.flag_antenna(self.ms, antenna)
 
-    def generate_image(self, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0, script='clean', del_script=True):
+    def generate_image(self, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0, gridmode='widefield', wprojplanes=-1, script='clean', del_script=True):
         """
         Generates multi-frequency synthesized images using all baselines within the specified cutoff threshold
 
@@ -59,7 +59,11 @@ class Imaging(object):
         stop: int
             Stopping/endign frequency channel. Default is 900.
         uvlength: float
-            Uv length in metres equal to or smaller to exclude while generating the image. Default is 0.        
+            UV length in metres equal to or smaller to exclude while generating the image. Default is 0.        
+        gridmode: string
+            Gridding kernel for FFT-based transforms
+    wprojplanes : int
+        Number of w-projection planes for convolution; -1 => automatic determination
         del_script : boolean
             If True, deletes the casa script used to execute the CASA clean task.
             Default is True.
