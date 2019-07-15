@@ -68,7 +68,7 @@ class Imaging(object):
             If True, deletes the casa script used to execute the CASA clean task.
             Default is True.
         """
-        ct.imaging(self.ms, imagename, antenna=antenna, cellsize=cellsize, npix=npix, niter=niter, threshold=threshold, weighting=weighting, start=start, stop=stop, uvlength=uvlength, script=script, delete=del_script)
+        ct.imaging(self.ms, imagename, antenna=antenna, cellsize=cellsize, npix=npix, niter=niter, threshold=threshold, weighting=weighting, start=start, stop=stop, uvlength=uvlength, gridmode=gridmode, wprojplanes=wprojplanes, script=script, delete=del_script)
             
     def remove_image(self, imagename, del_img=False):
         """
