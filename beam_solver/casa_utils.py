@@ -72,7 +72,7 @@ def flag_antenna(dset, antenna, script='flag_a', delete=True):
     task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), antenna="'{}'".format(antenna))
     casawrapper.call_casa_task(task='flagdata', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
 
-def imaging(dset, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0, gridmode='widefield', wprojplanes=-1, script='clean', delete=True):
+def imaging(dset, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0, gridmode='', wprojplanes=1024, script='clean', delete=True):
     """
     Generates images using all antenna or specific antennas using visibilities from the measurement set (MS)
 
