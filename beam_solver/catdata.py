@@ -245,7 +245,6 @@ class catData(object):
         """
         assert len(ras) == len(decs), "Right ascenscion array should be of the same size as declination array."
         if not isinstance(pols, list): pols = [pols]
-        pols = [pol.decode() for pol in pols]
         npols = len(pols)
         if npols == 1:
             fitsfiles = fitsfiles_xx if pols[0] == 'xx' else fitsfiles_yy 
@@ -355,7 +354,7 @@ class catData(object):
             mgp = f.create_group('Metadata')
             mgp['Nfits'] = self.Nfits
             mgp['Nsrcs'] = self.Nsrcs
-            mgp['pols'] = np.string_(self.pols)
+            mgp['pols'] = [np.string_(p) for p in self.pols] 
             mgp['ha_array'] = self.ha_array
             mgp['error_array'] = self.error_array
             mgp['pos_array'] = self.pos_array
