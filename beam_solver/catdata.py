@@ -245,6 +245,7 @@ class catData(object):
         """
         assert len(ras) == len(decs), "Right ascenscion array should be of the same size as declination array."
         if not isinstance(pols, list): pols = [pols]
+        pols = [pol.decode() for pol in pols]
         npols = len(pols)
         if npols == 1:
             fitsfiles = fitsfiles_xx if pols[0] == 'xx' else fitsfiles_yy 
