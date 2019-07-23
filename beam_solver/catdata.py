@@ -225,22 +225,22 @@ class catData(object):
         polarization. It can also return a dictionary containing the data and selected metadata.
         Parameters
         ---------
-        ras : list of float
+        ras: list of float
             List of right ascension values in degrees.
-        decs : list of floats
+        decs: list of floats
             List of declination values in degrees.
-        fitsfiles_xx : list of str
+        fitsfiles_xx: list of str
             List of of xx fitsfiles that will be used to generate or extract the source catalog.
-        fitsfiles_yy : list of str
+        fitsfiles_yy: list of str
             List of of yy fitsfiles that will be used to generate or extract the source catalog.
-        pol : str ot list of str
+        pols: str ot list of str
             Polizations can be xx or yy or both.
-        flux_type : str
+        flux_type: str
             Flux type to extract, options:
                 'pflux'       : peak value from the data
                 'gauss_pflux' : peak value of the 2d gaussian fit of the data
                 'gauss_tflux' : total integrated value of the 2d gaussian fit of the data
-        return_data : boolean
+        return_data: boolean
             If True, returns dictionary with the data values and selected metadata.
         """
         assert len(ras) == len(decs), "Right ascenscion array should be of the same size as declination array."
@@ -258,7 +258,27 @@ class catData(object):
         if return_data:
             return srcdict
 
-    def add_src(self, ras, decs, pols, fitsfiles_xx=None, fitsfiles_yy=None, flux_type='pflux'):
+    def add_src(self, ras, decs, fitsfiles_xx=None, fitsfiles_yy=None, pols='xx', flux_type='pflux'):
+        """
+        Adding data and metadata to an existing catalog.
+        Parameters
+        ----------
+        ras: list of float
+            List of right ascension values in degrees.
+        decs: list of floats
+            List of declination values in degrees.
+        fitsfiles_xx: list of str
+            List of of xx fitsfiles that will be used to generate or extract the source catalog.
+        fitsfiles_yy: list of str
+            List of of yy fitsfiles that will be used to generate or extract the source catalog.
+        pol: str ot list of str
+            Polizations can be xx or yy or both.
+        flux_type: str
+            Flux type to extract, options:
+                'pflux'       : peak value from the data
+                'gauss_pflux' : peak value of the 2d gaussian fit of the data
+                'gauss_tflux' : total integrated value of the 2d gaussian fit of the data
+        """ 
         if not fitsfiles_xx is None:
             assert len(fitsfiles_xx) == self.Nfits, "Number of fitsfiles is not consistent with Nfits."
         if not fitsfiles_yy is None:
@@ -275,14 +295,67 @@ class catData(object):
         self._set_attr('Nsrcs', nsrcs + len(ras))
 
     def _get_npoints(self, dr):
+        """
+        Calculates number of data points for desired spacing
+        Parameters:
+        ---------- 
+        dr: float
+            Spacing between two consecutive points
+        """ 
         d_ha = self.ha_array[0, 0] - self.ha_array[0, -1]
         dn_ha = np.abs(d_ha) / dr
         return int(dn_ha) + 1
 
     def _interpolate_data(self, x, y, kind, bounds_error):
+        """
+        1-D interpolation function
+        Parameters
+        ----------
+        x: np.ndarray
+            A 1-D array of real values.
+        y: np.ndarray
+            A N-D array of real values.
+            The length of `y` along the interpolation axis must be equal to the length of `x`.
+        kind: str, optional
+            Specifies the kind of interpolation as a string ('linear', 'nearest', 'zero', 
+            'slinear', 'quadratic', 'cubic','previous', 'next', where 'zero', 'slinear', 
+            'quadratic' and 'cubic' refer to a spline interpolation of zeroth, first, second 
+            or third order; 'previous' and 'next' simply return the previous or next value
+            of the point) or as an integer specifying the order of the spline interpolator 
+            to use. Default is 'linear'.
+        bounds_error: boolean, optional
+            If True, a ValueError is raised any time interpolation is attempted on a value outside
+            of the range of x (where extrapolation is necessary). If False, out of bounds values
+            are assigned `fill_value`.
+            By default, an error is raised unless `fill_value="extrapolate"`.
+        """
         return interpolate.interp1d(x.compress(~np.isnan(y)), y.compress(~np.isnan(y)), kind=kind, bounds_error=bounds_error)
  
-    def interpolate_catalog(self, dha=0.01, kind='cubic', bounds_error=False):
+    def interpolate_catalog(self, dha=0.01, kind='cubic', discard_neg=False, bounds_error=True):
+        """
+        Interpolates the points between source tracks using any interpolation algorithm. Default one uses
+        cubic interpolation.
+        Parameters
+        ----------
+        dha: float
+            Spacing in hour angle on which the interpolation is carried out. The spacing should be
+            specified in radians. Default is 0.01.
+        kind: str
+             Specifies the kind of interpolation as a string ('linear', 'nearest', 'zero',
+            'slinear', 'quadratic', 'cubic','previous', 'next', where 'zero', 'slinear',
+            'quadratic' and 'cubic' refer to a spline interpolation of zeroth, first, second
+            or third order; 'previous' and 'next' simply return the previous or next value
+            of the point) or as an integer specifying the order of the spline interpolator
+            to use. Default is 'linear'.
+            Interpolation algorithm, can be 'linear, cubic, nearest'. Default is cubic interpolation.
+        discard_neg: boolean
+            True discards all negative data values during interpolation. Default is False.
+        bounds_errors: boolean
+            If True, a ValueError is raised any time interpolation is attempted on a value outside
+            of the range of x (where extrapolation is necessary). If False, out of bounds values 
+            are assigned `fill_value`.
+            By default, an error is raised unless `fill_value="extrapolate"`.
+        """
         data = self.data_array
         npoints = self._get_npoints(dha)
         data_array = np.zeros((len(self.pols), self.Nsrcs, npoints))
@@ -292,20 +365,22 @@ class catData(object):
         for i in range(self.Nsrcs):
             for p in range(len(self.pols)):
                 # discarding data points with zero to avoid jump in the interpolation
-                ind0 = np.where(self.data_array[p, i, :] > 0)
-                data = self.data_array[p, i, :][ind0]
-                error = self.error_array[p, i, :][ind0]
-                ha = self.ha_array[i, :][ind0]
+                if discard_neg:
+                    ind0 = np.where(self.data_array[p, i, :] > 0)
+                else:
+                    ind0 = np.arange(len(self.data_array[p, i, :]))
+                data = self.data_array[p, i, ind0]
+                error = self.error_array[p, i, ind0]
+                ha = self.ha_array[i, ind0]
                 ha_array[i, :] = np.linspace(np.min(ha), np.max(ha), npoints)
                 interp_azs, interp_alts = self._get_azalt(self.pos_array[i][1], ha_array[i, :])
                 azalt_array[0, i, :] = interp_azs
                 azalt_array[1, i, :] = interp_alts
-                # interpolating data
-                interp_func = self._interpolate_data(ha, data, kind=kind, bounds_error=bounds_error)
-                data_array[p, i, :] = interp_func(ha_array[i, :])
-                #interpolating error
-                interp_func = self._interpolate_data(ha, error, kind=kind, bounds_error=bounds_error)
-                error_array[p, i, :] = interp_func(ha_array[i, :])
+                # interpolating data and error
+                interp_func_d = self._interpolate_data(ha, data, kind=kind, bounds_error=bounds_error)
+                interp_func_e = self._interpolate_data(ha, error, kind=kind, bounds_error=bounds_error)
+                data_array[p, i, :] = interp_func_d(ha_array[i, :])
+                error_array[p, i, :] = interp_func_e(ha_array[i, :])
     
         self.data_array = data_array
         self.azalt_array = azalt_array
