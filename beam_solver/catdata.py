@@ -331,7 +331,7 @@ class catData(object):
         """
         return interpolate.interp1d(x.compress(~np.isnan(y)), y.compress(~np.isnan(y)), kind=kind, bounds_error=bounds_error)
  
-    def interpolate_catalog(self, dha=0.01, kind='cubic', discard_neg=False, bounds_error=True):
+    def interpolate_catalog(self, dha=0.01, kind='cubic', discard_neg=False, bounds_error=False):
         """
         Interpolates the points between source tracks using any interpolation algorithm. Default one uses
         cubic interpolation.
@@ -354,7 +354,7 @@ class catData(object):
             If True, a ValueError is raised any time interpolation is attempted on a value outside
             of the range of x (where extrapolation is necessary). If False, out of bounds values 
             are assigned `fill_value`.
-            By default, an error is raised unless `fill_value="extrapolate"`.
+            Default is False.
         """
         data = self.data_array
         npoints = self._get_npoints(dha)
@@ -367,6 +367,7 @@ class catData(object):
                 # discarding data points with zero to avoid jump in the interpolation
                 if discard_neg:
                     ind0 = np.where(self.data_array[p, i, :] > 0)
+                    ind0 = ind0[0]
                 else:
                     ind0 = np.arange(len(self.data_array[p, i, :]))
                 data = self.data_array[p, i, ind0]
