@@ -1,4 +1,4 @@
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 from beam_solver import extract as et
 from beam_solver import coord_utils as ct
 from beam_solver import fits_utils as ft
@@ -397,15 +397,19 @@ class catData(object):
         """
         if not isinstance(keys, list): keys = [keys]
         for key in keys:
-            self.pos_array = np.array(self.pos_array)
             ind = np.where(self.pos_array == [key])
             if len(ind[0]) == 0:
                 raise ValueError('{} could be not found.'.format(key))
-            self.data_array = np.delete(self.data_array, ind[0], 1)
-            self.error_array = np.delete(self.error_array, ind[0], 1)
-            self.ha_array = np.delete(self.ha_array, ind[0], 0)
-            self.pos_array = np.delete(self.pos_array, ind[0], 0)
-            self.azalt_array = np.delete(self.azalt_array, ind[0], 1)
+            if len(ind[0]) > 2:
+                counter = Counter(ind[0])
+                ind0 = [counter.most_common(1)[0][0]] * 2
+            else:
+                ind0 = ind[0]    
+            self.data_array = np.delete(self.data_array, ind0, 1)
+            self.error_array = np.delete(self.error_array, ind0, 1)
+            self.ha_array = np.delete(self.ha_array, ind0, 0)
+            self.pos_array = np.delete(self.pos_array, ind0, 0)
+            self.azalt_array = np.delete(self.azalt_array, ind0, 1)
             self.Nsrcs -= 1
 
     def write_hdf5(self, filename, clobber=False):
