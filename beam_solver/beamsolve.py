@@ -15,7 +15,7 @@ class BeamOnly():
         self.eqs = OrderedDict()
         self.consts = OrderedDict()
         self.sol_dict = OrderedDict()
-        self.diag_noise = []
+        self.sigma = OrderedDict()
         self.ls = None
 
     def _mk_key(self, pixel, srcid, timeid):
@@ -99,7 +99,7 @@ class BeamOnly():
         ws = [w0, w1, w2, w3] 
         return ps, ws
 
-    def _mk_eq(self, ps, ws, obs_flux, catalog_flux, srcid, timeid, equal_wgts, **kwargs):
+    def _mk_eq(self, ps, ws, obs_flux, catalog_flux, sigma, srcid, timeid, equal_wgts, **kwargs):
         """
         Constructs equations that will form the linear system of equations.
         Parameters
@@ -132,6 +132,7 @@ class BeamOnly():
         if eq not in self.eqs:
             self.eqs[eq] = obs_flux / divisor
             self.consts.update(c)
+            self.sigma[eq] = sigma
 
     def calc_catalog_flux(self, beam_model, pol):
         """
@@ -157,12 +158,6 @@ class BeamOnly():
             instance of linsolve solver containing the linear system of equations.
         """
         return ls.get_A()
-
-    def get_noise_matrix(self):
-        noise_n = len(self.diag_noise)
-        noise_array = np.zeros((noise_n, noise_n))
-        np.fill_diagonal(noise_array, self.diag_noise)
-        return noise_array
 
     def svd(self, ls, A):
         """
@@ -244,8 +239,7 @@ class BeamOnly():
                     for j in range(nfits):
                         I_s = obs_vals[i, j]
                         if np.isnan(I_s) or I_s < flux_thresh:continue
-                        self._mk_eq(ps, ws, I_s, catalog_flux[i], i, j, equal_wgts, **kwargs)
-                        self.diag_noise.append(err_vals[i, j])
+                        self._mk_eq(ps, ws, I_s, catalog_flux[i], err_vals[i,j], i, j, equal_wgts, **kwargs)
 
     def solve(self, **kwargs):
         """
@@ -271,7 +265,27 @@ class BeamOnly():
 
         obs_beam.shape = (self.bm_pix, self.bm_pix)
         return obs_beam
-    
+
+    def get_noise_matrix(self):
+        noise_n = len(self.sigma)
+        noise_array = np.zeros((noise_n, noise_n))
+        np.fill_diagonal(noise_array, [self.sigma[key] for key in self.sigma.keys()])
+        return noise_array
+
+    def eval_error(self, sol, ls):
+        A = self.get_A(ls)
+        # evaluating (AtNA)^-1
+        AtNA = np.dot(np.dot(A[:, :, 0].T.conj(), self.get_noise_matrix()), A[:, :, 0])
+        beam_error = np.diag(np.linalg.inv(AtNA))
+        beam_error_mat = np.zeros((self.bm_pix**2), dtype=float)
+        for ii, key in enumerate(list(sol.keys())):
+            if key[0] == 'b':
+                px = int(key.strip('b'))
+                beam_error_mat[px] = beam_error[ii]
+
+        beam_error_mat.shape = (self.bm_pix, self.bm_pix)
+        return beam_error_mat
+
 class BeamCat(BeamOnly):
     def __init__(self, cat=None, bm_pix=61):
         """
@@ -281,7 +295,7 @@ class BeamCat(BeamOnly):
         """
         BeamOnly.__init__(self, cat, bm_pix)
 
-    def _mk_eq(self, ps, ws, obs_flux, catalog_flux, srcid, timeid, equal_wgts, **kwargs):
+    def _mk_eq(self, ps, ws, obs_flux, catalog_flux, sigma, srcid, timeid, equal_wgts, **kwargs):
         """
         Constructs equations that will form the linear system of equations.
         Parameters
@@ -316,6 +330,7 @@ class BeamCat(BeamOnly):
         if eq not in self.eqs:
             self.eqs[eq] = obs_flux
             self.consts.update(c)
+            self.sigma[eq] = sigma
         for p in range(4):
             bpix = int(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))
             self.sol_dict['b%d'%bpix] = bvals[bpix]
@@ -353,8 +368,7 @@ class BeamCat(BeamOnly):
                     for j in range(nfits):
                         I_s = obs_vals[i, j]
                         if np.isnan(I_s) or I_s < flux_thresh: continue
-                        self._mk_eq(ps, ws, I_s, catalog_flux[i], i, j, equal_wgts, **kwargs)
-                        self.diag_noise.append(err_vals[i, j])
+                        self._mk_eq(ps, ws, I_s, catalog_flux[i], err_vals[i,j], i, j, equal_wgts, **kwargs)
 
     def add_constrain(self, srcid, val):
         """
@@ -392,13 +406,31 @@ class BeamCat(BeamOnly):
         """
         obs_beam = BeamOnly(cat=self.cat, bm_pix=self.bm_pix).eval_sol(sol[1])
         fluxvals = np.zeros((2, self.cat.Nsrcs))
-        k = 0
         for key in sol[1].keys():
             if key[0] == 'I':
-                fluxvals[0, k] = int(key[1::]) + 1
-                fluxvals[1, k] = sol[1].get(key)
-                k += 1
+                ind = int(key[1::])
+                fluxvals[0, ind] = ind
+                fluxvals[1, ind] = sol[1].get(key)
         return fluxvals, obs_beam
+
+    def eval_error(self, sol, ls):
+        A = self.get_A(ls)
+        # evaluating (AtNA)^-1
+        AtNA = np.dot(np.dot(A[:, :, 0].T.conj(), self.get_noise_matrix()), A[:, :, 0])
+        errors = np.diag(np.linalg.inv(AtNA))
+        flux_error = np.zeros((self.cat.Nsrcs))
+        beam_error_mat = np.zeros((self.bm_pix**2), dtype=float)
+        k = 0
+        for ii, key in enumerate(sol[1].keys()):
+            if key[0] == 'I':
+                flux_error[k] = errors[ii]
+                k += 1
+            else:
+                px = int(key.strip('b'))
+                beam_error_mat[px] = errors[ii]
+
+        beam_error_mat.shape = (self.bm_pix, self.bm_pix)
+        return flux_error, beam_error_mat
 
 class BeamOnlyCross(BeamOnly):
     def __init__(self, cat=None, bm_pix=61):
