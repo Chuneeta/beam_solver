@@ -5,6 +5,7 @@ import pyuvdata
 from beam_solver import get_redbls as gr
 import copy
 import pylab
+import IPython
 
 def read_uvfile(uvfile):
     """
@@ -121,31 +122,24 @@ def generate_residual(uvfile, uvfits, omni_calfits, abs_calfits, pol, outfile=No
     omni_gains, omni_flags = hc.io.load_cal(omni_calfits)
     abs_gains, abs_flags = hc.io.load_cal(abs_calfits)
 
-    res_data = np.ndarray((data.shape), dtype=data.dtype)
-    flag_data = np.ndarray((flag.shape), dtype=flag.dtype)
+    res_data = copy.deepcopy(data)
+    flag_data = np.ones((flag.shape), dtype=flag.dtype)
     for mbl in mod_bls:
         bl_grp = red[tuple(mbl) + (pol,)]
-        if len(bl_grp) > 1: 
-            # somewhow the conjugate model visibilities are stored in the uvfits file
-            for bl in bl_grp:
-                mod_data = np.conj(uvf.get_data(tuple(mbl) + (pol,)).copy())
-                inds = uvd.antpair2ind(bl[0], bl[1])
-                _sh1, _sh2 = mod_data.shape
-                try:
-                    mod_data *= omni_gains[bl[0], 'J{}'.format(pol)] * np.conj(omni_gains[bl[1], 'J{}'.format(pol)])
-                    mod_data /=  abs_gains[bl[0], 'J{}'.format(pol)]  *  np.conj(abs_gains[bl[1], 'J{}'.format(pol)])
-                    data_bl = uvd.get_data(bl)
-                    residual = data_bl - mod_data
-                    res_data[inds, :, :, :] = residual.reshape((_sh1, 1, _sh2, 1))
-                    flag_data[inds, :, :, :] = np.logical_or(uvf.get_flags(mbl).reshape(_sh1, 1, _sh2, 1), uvd.get_flags(bl).reshape(_sh1, 1, _sh2, 1))
-                except KeyError:
-                    flag_data[inds, :, :, :] = True
-                    res_data[inds, :, :, :] = 0 + 0j
-                    continue
-        else:
-            inds = uvd.antpair2ind(bl_grp[0][0], bl_grp[0][1])
-            flag_data[inds, :, :, :] = True
-            res_data[inds, :, :, :] = 0 + 0j
+        # somewhow the conjugate model visibilities are stored in the uvfits file
+        for bl in bl_grp:
+            mod_data = np.conj(uvf.get_data(tuple(mbl) + (pol,)).copy())
+            inds = uvd.antpair2ind(bl[0], bl[1])
+            _sh1, _sh2 = mod_data.shape
+            try:
+                mod_data *= omni_gains[bl[0], 'J{}'.format(pol)] * np.conj(omni_gains[bl[1], 'J{}'.format(pol)])
+                mod_data /=  abs_gains[bl[0], 'J{}'.format(pol)]  *  np.conj(abs_gains[bl[1], 'J{}'.format(pol)])
+                data_bl = uvd.get_data(bl)
+                residual = data_bl - mod_data
+                res_data[inds, :, :, :] = residual.reshape((_sh1, 1, _sh2, 1))
+                flag_data[inds, :, :, :] = np.logical_or(uvf.get_flags(mbl).reshape(_sh1, 1, _sh2, 1), uvd.get_flags(bl).reshape(_sh1, 1, _sh2, 1))
+            except KeyError:
+                continue
 
     # writing data to UV file
     if outfile is None:
