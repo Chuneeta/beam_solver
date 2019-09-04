@@ -485,6 +485,7 @@ class catData(object):
         alts = self.azalt_array[1, :, :]
         flux_array = np.ndarray((self.Nsrcs), dtype=float)
         beam_array = np.ndarray((self.Nfits), dtype=float)
+        error_array = np.ndarray((self.Nsrcs), dtype=float)
         for i in range(self.Nsrcs):
             for j in range(self.Nfits):
                 beam_array[j] = healpy.get_interp_val(beam, np.pi/2 - (alts[i, j]), azs[i, j]) 
@@ -492,4 +493,8 @@ class catData(object):
                 flux_array[i] = np.nansum(self.data_array[0, i, :] * beam_array) / np.nansum(beam_array ** 2)
             else:
                 flux_array[i] = np.nansum(self.data_array[pol2ind[pol], i, :] * beam_array) / np.nansum(beam_array ** 2)
-        return flux_array
+            if len(self.pols) == 1:
+                error_array[i]  = np.nansum(self.error_array[0, i, :])
+            else:
+                error_array[i]  = np.nansum(self.error_array[pol2ind[pol], i, :]) 
+        return flux_array, error_array
