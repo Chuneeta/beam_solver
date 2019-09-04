@@ -299,12 +299,12 @@ class BeamCat(BeamOnly):
         """
         Constructs equations that will form the linear system of equations.
         Parameters
-        ---------
+        ----------
         ps : numpy.nd array
             Numpy array containing the four closest pixel numbers corresponding to the
             alt-az position of the source
         ws : ns array
-            Numpy array contining the weights corresponding to the pixel numbers
+            Numpy array continuing the weights corresponding to the pixel numbers
         obs_flux : float
             Measured or observed flux value
         catalog_flux : float
@@ -329,8 +329,8 @@ class BeamCat(BeamOnly):
                 + '*b%d'% (self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j]))) + '*I%d'%i for p in range(4)])
         if eq not in self.eqs:
             self.eqs[eq] = obs_flux
-            self.consts.update(c)
             self.sigma[eq] = sigma
+            self.consts.update(c)
         for p in range(4):
             bpix = int(self.unravel_pix(self.bm_pix, (ps[p][0, j], ps[p][1, j])))
             self.sol_dict['b%d'%bpix] = bvals[bpix]
@@ -369,7 +369,7 @@ class BeamCat(BeamOnly):
                         I_s = obs_vals[i, j]
                         if np.isnan(I_s) or I_s < flux_thresh: continue
                         self._mk_eq(ps, ws, I_s, catalog_flux[i], err_vals[i,j], i, j, equal_wgts, **kwargs)
-
+                        
     def add_constrain(self, srcid, val):
         """
         Add constrain to the flux value in the system of linear equations
@@ -393,8 +393,8 @@ class BeamCat(BeamOnly):
 
     def solve(self, maxiter=50, conv_crit=1e-11, norm_weight=100, **kwargs):
         self._build_solver(norm_weight, **kwargs)
-        sol = self.ls.solve_iteratively(maxiter=maxiter, conv_crit=conv_crit, verbose=True)
-        return sol
+        meta, sol = self.ls.solve_iteratively(maxiter=maxiter, conv_crit=conv_crit, verbose=True)
+        return meta, sol
 
     def eval_sol(self, sol):
         """
@@ -404,27 +404,29 @@ class BeamCat(BeamOnly):
         sol : dict
             Dictionary containing the solutions, returned by the solver.
         """
-        obs_beam = BeamOnly(cat=self.cat, bm_pix=self.bm_pix).eval_sol(sol[1])
+        obs_beam = BeamOnly(cat=self.cat, bm_pix=self.bm_pix).eval_sol(sol)
         fluxvals = np.zeros((2, self.cat.Nsrcs))
-        for key in sol[1].keys():
+        for key in sol.keys():
             if key[0] == 'I':
                 ind = int(key[1::])
                 fluxvals[0, ind] = ind
-                fluxvals[1, ind] = sol[1].get(key)
+                fluxvals[1, ind] = sol.get(key)
         return fluxvals, obs_beam
 
-    def eval_error(self, sol, ls):
+    def eval_error(self, sol, ls, constrain=False):
         A = self.get_A(ls)
+        if constrain:
+            A = A[:-1] # removing the constrained equation
         # evaluating (AtNA)^-1
-        AtNA = np.dot(np.dot(A[:, :, 0].T.conj(), self.get_noise_matrix()), A[:, :, 0])
+        A_n = (A - np.min(A))/(np.max(A) - np.min(A))
+        AtNA = np.dot(np.dot(A_n[:, :, 0].T.conj(), self.get_noise_matrix()), A_n[:, :, 0])
         errors = np.diag(np.linalg.inv(AtNA))
         flux_error = np.zeros((self.cat.Nsrcs))
         beam_error_mat = np.zeros((self.bm_pix**2), dtype=float)
-        k = 0
-        for ii, key in enumerate(sol[1].keys()):
+        for ii, key in enumerate(sol.keys()):
             if key[0] == 'I':
-                flux_error[k] = errors[ii]
-                k += 1
+                ind = int(key[1::])
+                flux_error[ind] = errors[ii]
             else:
                 px = int(key.strip('b'))
                 beam_error_mat[px] = errors[ii]
