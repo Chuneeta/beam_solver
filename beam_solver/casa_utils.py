@@ -147,6 +147,29 @@ def exportfits(imagename, fitsname=None, overwrite=False, script='exportfits', d
     task_opt = casawrapper.create_casa_options(imagename="'{}'".format(imagename), fitsimage="'{}'".format(fitsname), overwrite=overwrite)
     casawrapper.call_casa_task(task='exportfits', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
 
+def importfits(fitsname, imagename=None, overwrite=False, script='importfits', delete=True):
+    """
+    Converts fitsfile to CASA image format
+    Paramters
+    ---------
+    fitsname: string
+        Name of input fits file. 
+    imagename: string
+        Name of the output casa image.Default is <fitsname>.fits.
+    overwrite : boolean
+        If True, overwrites the existing image with the new one.
+        Default is False.
+    script: string
+        Name of casapy script that will be create on-the-fly. Default is exportfits
+    delete: boolean
+        Deletes the casapy script that was created on-the-fly after execution
+    """
+    if imagename is None:
+        imagename = fitsname.replace('.fits', '.image')
+    casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
+    task_opt = casawrapper.create_casa_options(fitsimage="'{}'".format(fitsname), imagename="'{}'".format(imagename), overwrite=overwrite)
+    casawrapper.call_casa_task(task='importfits', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
+    
 def generate_complist_input(ras, decs, fluxs, sindex, freqs, flux_unit='Jy', freq_unit='MHz', output='complist.dat'):
     """
     Generates the inputs for complist task
@@ -181,7 +204,9 @@ def generate_complist_input(ras, decs, fluxs, sindex, freqs, flux_unit='Jy', fre
         freqs = freqs * 1e3
     stdout = open(output, 'wb')
     for ii, ra in enumerate(ras):
+        print (ra)
         ra_str = cd.deg2hms(ra)
+        print (ra_str)
         dec_str = cd.deg2dms(decs[ii])
         text = ('J2000 {} {}: {}: {}: {}\n'.format(ra_str, dec_str, fluxs[ii], sindex[ii], freqs[ii])).encode()
         stdout.write(text)
