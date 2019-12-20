@@ -240,7 +240,7 @@ def create_complist(infile, outfile='component.cl', script='create_cl', delete=F
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
     casawrapper.call_casa_script(script + '.py', casa_opts=casa_opt, delete=delete)
 
-def ft(dset, complist=None, script='ft', delete=False):
+def ft(dset, complist=None, model=None, script='ft', delete=False):
     """
     Fourier transforming model (complist) and writing the resulting visibilities into the MODEL column
     Parameters
@@ -250,17 +250,23 @@ def ft(dset, complist=None, script='ft', delete=False):
         and the corresponding metadata
     complist : string
         Name of the component list containing list of model sources
+    model : string
+        Name of model image(s)
     scripts : string
         Name of casapy script that will be create on-the-fly. Default is exportfits
     delete: boolean
         Deletes the casapy script that was created on-the-fly after execution
     """
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
-    if complist is None:
+    if complist is None and model is None:
         task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), usescratch=True)
-    else:
+    elif not complist is None:
         task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), complist="'{}'".format(complist ), usescratch=True)
-    casawrapper.call_casa_task(task='ft', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete) 
+    elif not model is None:
+        task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), model="'{}'".format(model), usescratch=True)
+    else:
+        raise ValueError('Need to specify model input.')
+    casawrapper.call_casa_task(task='ft', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
 
 def read_col(dset, column, outfile='data', script='read_col', delete=False):
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
