@@ -330,7 +330,7 @@ class catData(object):
             By default, an error is raised unless `fill_value="extrapolate"`.
         """
         return interpolate.interp1d(x.compress(~np.isnan(y)), y.compress(~np.isnan(y)), kind=kind, bounds_error=bounds_error)
- 
+
     def interpolate_catalog(self, dha=0.01, kind='cubic', discard_neg=False, bounds_error=False):
         """
         Interpolates the points between source tracks using any interpolation algorithm. Default one uses
@@ -379,10 +379,21 @@ class catData(object):
                 azalt_array[1, i, :] = interp_alts
                 # interpolating data and error
                 interp_func_d = self._interpolate_data(ha, data, kind=kind, bounds_error=bounds_error)
-                interp_func_e = self._interpolate_data(ha, error, kind=kind, bounds_error=bounds_error)
                 data_array[p, i, :] = interp_func_d(ha_array[i, :])
-                error_array[p, i, :] = interp_func_e(ha_array[i, :])
-    
+                #interp_func_e = self._interpolate_data(ha, error, kind=kind, bounds_error=bounds_error)
+                #error_array[p, i, :] = interp_func_e(ha_array[i, :])
+                for k in range(0, (len(ha)), 2):
+                    try:
+                        inds = np.where((ha_array[i, :]>=ha[k]) & (ha_array[i, :]<=ha[k+2]))
+                        error_array[p, i, inds] = np.sum([error[k], error[k + 1], error[k + 2]]) 
+                    except IndexError:
+                        try:
+                            inds = np.where((ha_array[i, :]>=ha[k]) & (ha_array[i, :]<=ha[k+1]))
+                            error_array[p, i, inds] = np.sum([error[k], error[k + 1]])
+                        except IndexError:
+                            inds = np.where((ha_array[i, :]>=ha[k]))
+                            error_array[p, i, inds] = error[k]
+
         self.data_array = data_array
         self.azalt_array = azalt_array
         self.error_array = error_array
