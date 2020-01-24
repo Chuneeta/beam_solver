@@ -382,66 +382,16 @@ class catData(object):
                 azalt_array[1, i, :] = interp_alts
                 # interpolating data and error
                 interp_func_d = self._interpolate_data(ha, data, kind=kind, bounds_error=bounds_error)
+                interp_func_e = self._interpolate_data(ha, error, kind='linear', bounds_error=bounds_error)
                 data_array[p, i, :] = interp_func_d(ha_array[i, :])
-                # error evaluations using random realizations
-                error_array[p, i, :] = self._evaluate_error_intp(ha, data, error, ha_array[i, :], 'cubic', draws)
-                
+                error_array[p, i, :] = interp_func_e(ha_array[i, :]) / data_array[p, i, :]
+        
         self.data_array = data_array
         self.azalt_array = azalt_array
         self.error_array = error_array
         self.ha_array = ha_array
         self.Nfits = npoints
 
-    def _draw_random_realizations(self, mean, sigma, size):
-        """
-        Draws random Gaussian realization
-        Parameters
-        ----------
-        mean: float
-            Average or mean of the Gaussian distribution
-      
-        sigma: float
-            Standard deviation of the Gaussian distribution
-        size: int
-            Number of points to be drawn for the Gaussian distribution
-        """        
-        return np.random.normal(mean, sigma, size)
-
-    def _evaluate_error_intp(self, x, y, error, xnew, kind, draws):
-        """
-        Evaluates the error on the interpoalted data points using random Gaussian realizations
-        x :  np.ndarray
-            Array of floats or integers corresponding to the data points (y)
-        y : np.ndarray
-            Array of floats or integers for which errors need to be drawn
-        error: np.ndarray
-            Array of floats contaning the uncorrelated errors associated with the data 
-            points (y)
-        xnew: np.ndarray
-            Array containing new set of x values at which the data points are interpolated 
-        kind : str
-            Interpolation type, can be either nearest, linear or cubic
-        draws: int
-            Number of realizations to draw for error estimation
-        """
-        realizations = np.ndarray((3 * draws, len(xnew)))
-        # first set of draws using data - errors
-        for i in range(draws):
-            realization = self._draw_random_realizations(np.nanmean(x - error), np.nanstd(x - error), len(x))
-            f = self._interpolate_data(x, realization, kind=kind, bounds_error=False)
-            realizations[i] = f(xnew)
-        # second set of draws using data
-        for i in range(draws):
-            realization = self._draw_random_realizations(np.nanmean(x), np.nanstd(x), len(x))
-            f = self._interpolate_data(x, realization, kind=kind, bounds_error=False)
-            realizations[i + draws] = f(xnew)
-        # third set of draws using data + errors
-        for i in range(draws):
-            realization = self._draw_random_realizations(np.nanmean(x + error), np.nanstd(x + error), len(x))
-            f = self._interpolate_data(x, realization, kind=kind, bounds_error=False)
-            realizations[i + 2 * draws] = f(xnew)        
-
-        return np.std(realizations, axis=0)
 
     def delete_src(self, keys):
         """
