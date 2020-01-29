@@ -274,8 +274,11 @@ class BeamOnly():
 
     def eval_error(self, sol, ls):
         A = self.get_A(ls)
-        # evaluating (AtNA)^-1
-        AtNA = np.dot(np.dot(A[:, :, 0].T.conj(), self.get_noise_matrix()), A[:, :, 0])
+        # evaluating (AtN^-1A)^-1
+        A_n = (A - np.min(A))/(np.max(A) - np.min(A))
+        inv_noise = np.linalg.inv(self.get_noise_matrix())
+        AtNA = np.dot(np.dot(A_n[:, :, 0].T.conj(), inv_noise, A_n[:, :, 0]))
+        #AtNA = np.dot(np.dot(A[:, :, 0].T.conj(), self.get_noise_matrix()), A[:, :, 0])
         beam_error = np.diag(np.linalg.inv(AtNA))
         beam_error_mat = np.zeros((self.bm_pix**2), dtype=float)
         for ii, key in enumerate(list(sol.keys())):
@@ -417,9 +420,10 @@ class BeamCat(BeamOnly):
         A = self.get_A(ls)
         if constrain:
             A = A[:-1] # removing the constrained equation
-        # evaluating (AtNA)^-1
+        # evaluating (AtN^-1A)^-1
         A_n = (A - np.min(A))/(np.max(A) - np.min(A))
-        AtNA = np.dot(np.dot(A_n[:, :, 0].T.conj(), self.get_noise_matrix()), A_n[:, :, 0])
+        inv_noise = np.linalg.inv(self.get_noise_matrix())
+        AtNA = np.dot(np.dot(A_n[:, :, 0].T.conj(), inv_noise, A_n[:, :, 0]))
         errors = np.diag(np.linalg.inv(AtNA))
         flux_error = np.zeros((self.cat.Nsrcs))
         beam_error_mat = np.zeros((self.bm_pix**2), dtype=float)
