@@ -78,11 +78,11 @@ def imaging(dset, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, 
 
     Parameters
     ----------
-    dset: string
-        Name of input measurement set (MS) file containing visibilities for all baselines
+    dset: string or list
+        Input measurement sets (MS) file containing visibilities for all baselines
         and the corresponding metadata
     imagename: string
-        Name of output casa image
+        Output casa image
     antenna: string
         Antenna(s) or baseline(s) to used for imaging.
         e.g antenna='0' uses data from antenna 0 only
@@ -118,10 +118,11 @@ def imaging(dset, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, 
     delete: boolean
         Deletes the casapy script that was created on-the-fly after execution
     """ 
+    vis = "{}".format(dset) if type(dset) is list else "'{}'".format(dset)
     antenna_out = 'all' if antenna == '' else antenna
     print ('Imaging using antenna(s) {}'.format(antenna_out))
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
-    task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), imagename="'{}'".format(imagename), antenna="'{}'".format(antenna), cell="'{}'".format(cellsize), imsize=[npix,npix], threshold="'{}'".format(threshold), niter="{}".format(niter), spw="'0:{}~{}'".format(start, stop), uvrange="'>{}'".format(uvlength), weighting="'{}'".format(weighting), gridmode="'{}'".format(gridmode), wprojplanes="{}".format(wprojplanes), usescratch=True)
+    task_opt = casawrapper.create_casa_options(vis=vis, imagename="'{}'".format(imagename), antenna="'{}'".format(antenna), cell="'{}'".format(cellsize), imsize=[npix,npix], threshold="'{}'".format(threshold), niter="{}".format(niter), spw="'0:{}~{}'".format(start, stop), uvrange="'>{}'".format(uvlength), weighting="'{}'".format(weighting), gridmode="'{}'".format(gridmode), wprojplanes="{}".format(wprojplanes), usescratch=True)
     casawrapper.call_casa_task(task='clean', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)    
 
 def exportfits(imagename, fitsname=None, overwrite=False, script='exportfits', delete=True):

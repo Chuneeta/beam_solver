@@ -31,6 +31,14 @@ def test_imaging():
     nt.assert_true(os.path.exists(imagename + '.image'))
     nt.assert_true(os.path.exists(imagename + '.psf'))
     nt.assert_true(os.path.exists(imagename + '.model'))
+    os.system('rm -rf {}.image'.format(imagename))
+    os.system('rm -rf {}.psf'.format(imagename))
+    os.system('rm -rf {}.model'.format(imagename))
+    # list as input
+    ct.imaging([msfile], imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0, script='clean', delete=True)
+    nt.assert_true(os.path.exists(imagename + '.image'))
+    nt.assert_true(os.path.exists(imagename + '.psf'))
+    nt.assert_true(os.path.exists(imagename + '.model'))
 
 def test_exportfits():
     ct.imaging(msfile, imagename)
