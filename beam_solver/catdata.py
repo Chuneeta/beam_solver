@@ -331,7 +331,7 @@ class catData(object):
         """
         return interpolate.interp1d(x.compress(~np.isnan(y)), y.compress(~np.isnan(y)), kind=kind, bounds_error=bounds_error)
 
-    def interpolate_catalog(self, dha=0.01, kind='cubic', discard_neg=False, bounds_error=False, draws=1000):
+    def interpolate_catalog(self, dha=0.01, kind='cubic', discard_neg=False, bounds_error=False):
         """
         Interpolates the points between source tracks using any interpolation algorithm. Default one uses
         cubic interpolation.
@@ -355,9 +355,6 @@ class catData(object):
             of the range of x (where extrapolation is necessary). If False, out of bounds values 
             are assigned `fill_value`.
             Default is False.
-        draws: int
-            Number of realizations to draw for evaluating the error on the interpolated data
-            points. Default is 1000.
         """
         data = self.data_array
         npoints = self._get_npoints(dha)
@@ -384,7 +381,7 @@ class catData(object):
                 interp_func_d = self._interpolate_data(ha, data, kind=kind, bounds_error=bounds_error)
                 interp_func_e = self._interpolate_data(ha, error, kind=kind, bounds_error=bounds_error)
                 data_array[p, i, :] = interp_func_d(ha_array[i, :])
-                error_array[p, i, :] = interp_func_e(ha_array[i, :]) / data_array[p, i, :]
+                error_array[p, i, :] = interp_func_e(ha_array[i, :])
         
         self.data_array = data_array
         self.azalt_array = azalt_array
