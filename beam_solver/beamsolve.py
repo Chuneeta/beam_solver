@@ -254,6 +254,8 @@ class BeamOnly():
         Evaluates the solutions to output the beam values into a
         2D grid.
 
+        Parameters
+        ----------
         sol : dict
             Dictionary containing the solutions, returned by the solver.
         """
@@ -266,18 +268,87 @@ class BeamOnly():
         obs_beam.shape = (self.bm_pix, self.bm_pix)
         return obs_beam
 
-    def get_noise_matrix(self):
+    def _uncorr_noise_matrix(self):
+        """
+        Returns uncorrelated noise matrix, i.e matrix containing only the variances 
+        associated with the flux measurements
+        """
         noise_n = len(self.sigma)
         noise_array = np.zeros((noise_n, noise_n))
         np.fill_diagonal(noise_array, [self.sigma[key] for key in self.sigma.keys()])
-        return noise_array
+        return noise_array.T
 
-    def eval_error(self, sol, ls):
+    def _partial_corr_noise_matrix(self):
+        """
+        Returns partially correlated noise matrix, i.e matrix containing only the variances
+        associated with the flux measurements and covariances of adjacent flux measurements.
+        """
+        noise_n = len(self.sigma)
+        noise_array = np.zeros((noise_n, noise_n))
+        keys = list(self.sigma.keys())
+        # filling diagonals
+        np.fill_diagonal(noise_array, [self.sigma[key] for key in keys])
+        # filling off-diagonal terms
+        np.fill_diagonal(noise_array[1:], [0.5 * self.sigma[keys[i]] for i in range(len(keys))])
+        np.fill_diagonal(noise_array[:, 1:], [0.5 * self.sigma[keys[1:][i]] for i in range(len(keys) - 1)]) 
+        return noise_array.T
+
+    def _full_corr_noise_matrix(self):
+        """
+        Returns fully correlated noise matrix, i.e matrix containing only the variances
+        and covariances associated with the flux measurements.
+        """
+        noise_n = len(self.sigma)
+        noise_array = np.zeros((noise_n, noise_n))
+        row0 = [self.sigma[key] for key in self.sigma.keys()]
+        noise_array = np.repeat(row0, noise_n)
+        noise_array = noise_array.reshape((noise_n, noise_n))
+        return noise_array.T
+
+    def get_noise_matrix(self, noise_type):
+        """
+        Return the noise matrix containing error associated with the flux measurements
+    
+        Parameters
+        ----------
+        noise_type: string
+            Type of noise or error, can be 'uncorr', 'partial' or 'uncorr'.
+            'uncorr' assumes the the error measurements associated with the measurements
+            are uncorrelated with each other.
+            'partial' assumes that the error measurements associated with the mesurements
+            are correlated with adjacent measurements.
+            'corr' considers correlation between all the flux measurements.
+        """
+        if noise_type == 'corr': noise_matrix = self._full_corr_noise_matrix()
+        elif noise_type == 'partial': noise_matrix = self._partial_corr_noise_matrix()
+        else: noise_matrix = self._uncorr_noise_matrix()
+        return noise_matrix
+
+    def eval_error(self, sol, ls, noise_type='uncorr'):
+        """
+        Evaluates the error associated with the beam solutions
+
+        Parameters
+        ----------
+        sol: dict
+            dictionary return by linsolve containing the beam solutions
+        ls: instance of linsolve
+            instance of linsolve solver containing the linear system of equations.
+                noise_type: string
+            Type of noise or error, can be 'uncorr', 'partial' or 'uncorr'.
+            'uncorr' assumes the the error measurements associated with the measurements
+            are uncorrelated with each other.
+            'partial' assumes that the error measurements associated with the mesurements
+            are correlated with adjacent measurements.
+            'corr' considers correlation between all the flux measurements.
+            Default is 'uncorr'.
+        """
         A = self.get_A(ls)
         # evaluating (AtN^-1A)^-1
         A_n = (A - np.min(A))/(np.max(A) - np.min(A))
-        inv_noise = np.linalg.inv(self.get_noise_matrix())
-        AtNA = np.dot(np.dot(A_n[:, :, 0].T.conj(), inv_noise, A_n[:, :, 0]))
+        noise = self.get_noise_matrix(noise_type=noise_type)
+        inv_noise = np.linalg.inv(noise)
+        AtNA = np.dot(np.dot(A_n[:, :, 0].T.conj(), inv_noise), A_n[:, :, 0])
         #AtNA = np.dot(np.dot(A[:, :, 0].T.conj(), self.get_noise_matrix()), A[:, :, 0])
         beam_error = np.diag(np.linalg.inv(AtNA))
         beam_error_mat = np.zeros((self.bm_pix**2), dtype=float)
@@ -285,7 +356,6 @@ class BeamOnly():
             if key[0] == 'b':
                 px = int(key.strip('b'))
                 beam_error_mat[px] = beam_error[ii]
-
         beam_error_mat.shape = (self.bm_pix, self.bm_pix)
         return beam_error_mat
 
@@ -395,6 +465,9 @@ class BeamCat(BeamOnly):
         self.ls = linsolve.LinProductSolver(self.eqs, sol0=self.sol_dict, **self.consts)
 
     def solve(self, maxiter=50, conv_crit=1e-11, norm_weight=100, **kwargs):
+        """
+        Solves for the primary beam
+        """
         self._build_solver(norm_weight, **kwargs)
         meta, sol = self.ls.solve_iteratively(maxiter=maxiter, conv_crit=conv_crit, verbose=True)
         return meta, sol
@@ -404,16 +477,18 @@ class BeamCat(BeamOnly):
         Evaluates the solutions to output the beam values into a
         2D grid and the model flux values.
 
+        Parameters
+        ----------
         sol : dict
             Dictionary containing the solutions, returned by the solver.
         """
-        obs_beam = BeamOnly(cat=self.cat, bm_pix=self.bm_pix).eval_sol(sol)
+        obs_beam = BeamOnly(cat=self.cat, bm_pix=self.bm_pix).eval_sol(sol[1])
         fluxvals = np.zeros((2, self.cat.Nsrcs))
-        for key in sol.keys():
+        for key in sol[1].keys():
             if key[0] == 'I':
                 ind = int(key[1::])
                 fluxvals[0, ind] = ind
-                fluxvals[1, ind] = sol.get(key)
+                fluxvals[1, ind] = sol[1].get(key)
         return fluxvals, obs_beam
 
     def eval_error(self, sol, ls, constrain=False):
@@ -423,7 +498,7 @@ class BeamCat(BeamOnly):
         # evaluating (AtN^-1A)^-1
         A_n = (A - np.min(A))/(np.max(A) - np.min(A))
         inv_noise = np.linalg.inv(self.get_noise_matrix())
-        AtNA = np.dot(np.dot(A_n[:, :, 0].T.conj(), inv_noise, A_n[:, :, 0]))
+        AtNA = np.dot(np.dot(A_n[:, :, 0].T.conj(), inv_noise), A_n[:, :, 0])
         errors = np.diag(np.linalg.inv(AtNA))
         flux_error = np.zeros((self.cat.Nsrcs))
         beam_error_mat = np.zeros((self.bm_pix**2), dtype=float)

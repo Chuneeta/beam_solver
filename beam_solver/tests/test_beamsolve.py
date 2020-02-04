@@ -181,7 +181,7 @@ class Test_BeamOnly():
     def test_calc_catalog_flux(self):
         bms = bs.BeamOnly(catd, 31)
         beam = bt.get_fitsbeam(beamfits, 151e6)
-        catalog_flux = bms.calc_catalog_flux(beam, 'xx')
+        catalog_flux, catalog_error = bms.calc_catalog_flux(beam, 'xx')
         nt.assert_almost_equal(catalog_flux[2], 1.000, 3)
 
     def test_build_solver(self):
@@ -197,7 +197,7 @@ class Test_BeamOnly():
         bms._mk_eq(ps, ws, 1, 1, 0.1, 0, 0, equal_wgts=True)
         bms._build_solver()
         A = bms.get_A(bms.ls)
-        np.testing.assert_almost_equal(A, np.array([[[0.], [0.], [0.], [1.]]]))
+        np.testing.assert_almost_equal(A, np.array([[[1.], [0.], [0.], [0.]]]))
 
     def test_svd(self):
         bms = bs.BeamOnly(bm_pix=31)
@@ -292,31 +292,77 @@ class Test_BeamOnly():
         catd = gen_catdata_zensrc(fluxval, sigma=2)
         bms = bs.BeamOnly(cat=catd, bm_pix=31)
         bms.add_eqs(catalog_flux=fluxval)
-        print (bms.sigma)
         nt.assert_equal(len(list(bms.sigma.keys())), 1)
 
-    def test_noise_matrix(self):
-        fluxval = np.array([2.0])
-        catd = gen_catdata_zensrc(fluxval, sigma=2)
-        bms = bs.BeamOnly(cat=catd, bm_pix=31)
-        bms.add_eqs(catalog_flux=fluxval)
-        noise_array = bms.get_noise_matrix()
-        nt.assert_equal(noise_array.shape, (1, 1))
+    def test_get_uncorr_noise_matrix(self):
+        azalt = np.array([[[np.pi, np.pi, np.pi]], [[np.pi, np.pi, np.pi]]])
+        cat_sim = create_catdata(azalt, np.array([[[3.,3.,3.]]]), np.array([[[.1,.2,.1]]]), 1, 3)
+        bms = bs.BeamOnly(cat_sim, bm_pix=31)
+        bms.add_eqs(catalog_flux=np.array([3]))
+        sol = bms.solve()
+        noise_array = bms._uncorr_noise_matrix()
+        nt.assert_equal(noise_array.shape, (3, 3))
+        np.testing.assert_almost_equal(np.diag(noise_array), np.array([.1,.2,.1]))
+        ans_matrix = np.array([[0.1, 0., 0. ], [0. , 0.2, 0. ], [0. , 0. , 0.1]]).T
+        np.testing.assert_almost_equal(noise_array, ans_matrix)
 
-    def test_eval_beam_error(self):
+    def test_partial_corr_noise_matrix(self):
+        azalt = np.array([[[np.pi, np.pi, np.pi]], [[np.pi, np.pi, np.pi]]])
+        cat_sim = create_catdata(azalt, np.array([[[3., 3., 3.]]]), np.array([[[.1,.2,.1]]]), 1, 3)
+        bms = bs.BeamOnly(cat_sim, bm_pix=31)
+        bms.add_eqs(catalog_flux=np.array([3]))
+        sol = bms.solve()
+        noise_array = bms._partial_corr_noise_matrix()
+        nt.assert_equal(noise_array.shape, (3, 3))
+        np.testing.assert_almost_equal(np.diag(noise_array), np.array([.1,.2,.1]))
+        ans_matrix = np.array([[0.1, 0.1, 0. ], [0.05, 0.2, 0.05 ], [0. , 0.1 , 0.1]]).T
+        np.testing.assert_almost_equal(noise_array, ans_matrix) 
+
+    def test_full_corr_noise_matrix(self):
+        azalt = np.array([[[np.pi, np.pi, np.pi]], [[np.pi, np.pi, np.pi]]])
+        cat_sim = create_catdata(azalt, np.array([[[3.,3.,3.]]]), np.array([[[.1,.2,.1]]]), 1, 3)
+        bms = bs.BeamOnly(cat_sim, bm_pix=31)
+        bms.add_eqs(catalog_flux=np.array([3]))
+        sol = bms.solve()
+        noise_array = bms._full_corr_noise_matrix()
+        nt.assert_equal(noise_array.shape, (3, 3))
+        np.testing.assert_almost_equal(np.diag(noise_array), np.array([.1,.2,.1]))
+        ans_matrix = np.array([[0.1, 0.2, 0.1], [0.1, 0.2, 0.1], [0.1, 0.2, 0.1]])
+        np.testing.assert_almost_equal(noise_array, ans_matrix)    
+
+    def test_get_noise_matrix(self):
+        azalt = np.array([[[np.pi, np.pi, np.pi]], [[np.pi, np.pi, np.pi]]])
+        cat_sim = create_catdata(azalt, np.array([[[3., 3., 3.]]]), np.array([[[.1,.2,.1]]]), 1, 3)
+        bms = bs.BeamOnly(cat_sim, bm_pix=31)
+        bms.add_eqs(catalog_flux=np.array([3]))
+        sol = bms.solve()
+        # uncorrelated noise
+        noise_matrix = bms.get_noise_matrix(noise_type='uncorr')
+        ans_matrix = np.array([[0.1, 0., 0. ], [0. , 0.2, 0. ], [0. , 0. , 0.1]]).T
+        np.testing.assert_almost_equal(noise_matrix, ans_matrix)
+        # partial correlated noise
+        noise_matrix = bms.get_noise_matrix(noise_type='partial')
+        ans_matrix = np.array([[0.1, 0.1, 0. ], [0.05 , 0.2, 0.05 ], [0. , 0.1 , 0.1]]).T
+        np.testing.assert_almost_equal(noise_matrix, ans_matrix)
+        # full correlated noise
+        noise_matrix = bms.get_noise_matrix(noise_type='corr')
+        ans_matrix = np.array([[0.1, 0.2, 0.1], [0.1, 0.2, 0.1], [0.1, 0.2, 0.1]])
+        np.testing.assert_almost_equal(noise_matrix, ans_matrix)
+
+    def test_eval_error(self):
         fluxvals = np.random.random(50) + 10
         catd = gen_catdata_grid(50, fluxvals, sigma_x=0.4, sigma_y=0.2)
         bms = bs.BeamOnly(cat=catd, bm_pix=31)
         bms.add_eqs(catalog_flux=fluxvals)
         sol = bms.solve()
-        beam_error = bms.eval_beam_error(sol, bms.ls)
+        beam_error = bms.eval_error(sol, bms.ls)
         nt.assert_equal(beam_error.shape, (31, 31))
 
 class Test_BeamCat():
     def test_mk_eq(self):
         bms = bs.BeamCat(cat=catd, bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
-        bms._mk_eq(ps, ws, 1, 1, 0, 0, equal_wgts=False, bvals=np.ones((31, 31)))
+        bms._mk_eq(ps, ws, 1, 1, 0.1, 0, 0, equal_wgts=False, bvals=np.ones((31, 31)))
         eq_keys = bms.eqs.keys()
         cns_keys = bms.consts.keys()
         nt.assert_almost_equal(len(eq_keys), 1)
@@ -330,7 +376,7 @@ class Test_BeamCat():
     def test_consts(self):
         bms = bs.BeamCat(cat=catd, bm_pix=31)
         ps, ws = bms.get_weights(np.array([[np.pi/2], [np.pi/2]]), 0, 1)
-        bms._mk_eq(ps, ws, 1, 1, 0, 0, bvals=np.ones((31, 31)), equal_wgts=False)
+        bms._mk_eq(ps, ws, 1, 1, 0.1, 0, 0, bvals=np.ones((31, 31)), equal_wgts=False)
         cns_keys = bms.consts.keys()
         nt.assert_almost_equal(len(cns_keys), 4)
         px0 = bms.unravel_pix(31, (15, 15))
@@ -387,14 +433,14 @@ class Test_BeamCat():
         ansbeam = np.zeros((31, 31))
         ansbeam.flat[1] = 1
         np.testing.assert_equal(obsbeam, ansbeam)
-        np.testing.assert_almost_equal(fluxval, np.array([[1], [2.0]]))
+        np.testing.assert_almost_equal(fluxval, np.array([[0], [2.0]]))
         sol0 = {'b%d'%i:1 for i in range(31**2)}
         sol0['I0'] = 2 
         sol = ({'chisq': 0.0, 'conv_crit': 0.0, 'iter': 1}, sol0)
         fluxval, obsbeam = bms.eval_sol(sol)
         ansbeam = np.ones((31, 31))
         np.testing.assert_almost_equal(obsbeam, ansbeam)
-        np.testing.assert_almost_equal(fluxval, np.array([[1], [2.0]]))
+        np.testing.assert_almost_equal(fluxval, np.array([[0], [2.0]]))
 
     def test_solve_src(self):    
         fluxval = np.array([2.0])
@@ -406,7 +452,7 @@ class Test_BeamCat():
         ansbeam = np.zeros((31, 31))
         ansbeam[15, 15] = 1
         np.testing.assert_almost_equal(obsbeam, ansbeam)
-        np.testing.assert_almost_equal(outflux, np.array([[1], [2.0]])) 
+        np.testing.assert_almost_equal(outflux, np.array([[0], [2.0]])) 
 
 class Test_BeamOnlyCross():
     def test_solver(self):
