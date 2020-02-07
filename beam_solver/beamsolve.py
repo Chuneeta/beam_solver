@@ -3,6 +3,8 @@ import linsolve
 import aipy
 import time
 from collections import OrderedDict
+from scipy.sparse.linalg import inv
+from scipy.sparse import csc_matrix
 
 class BeamOnly():
     def __init__(self, cat=None, bm_pix=61):
@@ -140,11 +142,17 @@ class BeamOnly():
         """
         return self.cat.calc_catalog_flux(beam_model, pol)
 
-    def _build_solver(self, **kwargs):
+    def _build_solver(self, noise=None, **kwargs):
         """
         Builds linsolve solver
         """
-        self.ls = linsolve.LinearSolver(self.eqs, **self.consts)
+        if not noise is None:
+            print  ('Yupiii')
+            N = self.get_noise_matrix(noise_type=kwargs['noise_type'])
+            self.ls = linsolve.LinearSolverNoise(self.eqs, N, **self.consts)
+        else:
+            
+            self.ls = linsolve.LinearSolver(self.eqs, **self.consts)
 
     def get_A(self, ls):
         """
@@ -324,7 +332,36 @@ class BeamOnly():
         else: noise_matrix = self._uncorr_noise_matrix()
         return noise_matrix
 
-    def eval_error(self, sol, ls, noise_type='uncorr'):
+    def _eval_error(self, ls, noise_type):
+        """
+        Evaluates the error (AtN^-1A)^-1
+
+        Parameters
+        ----------
+        ls: instance of linsolve
+            instance of linsolve solver containing the linear system of equations.
+                noise_type: string
+            Type of noise or error, can be 'uncorr', 'partial' or 'uncorr'.
+            'uncorr' assumes the the error measurements associated with the measurements
+            are uncorrelated with each other.
+            'partial' assumes that the error measurements associated with the mesurements
+            are correlated with adjacent measurements.
+            'corr' considers correlation between all the flux measurements.
+            Default is 'uncorr'.
+        """
+        A = self.get_A(ls)
+        An = (A - np.min(A))/(np.max(A) - np.min(A))
+        An_sparse = csc_matrix(A[:, :, 0])
+        N = self.get_noise_matrix(noise_type=noise_type)
+        N_sparse = csc_matrix(N)
+        Ninv = inv(N_sparse)
+        At = An_sparse.T
+        AtNi = At.dot(Ninv)
+        AtNiA = AtNi.dot(An_sparse)
+        AtNiAi = inv(AtNiA).todense()
+        return AtNiAi
+
+    def eval_beam_error(self, sol, ls, noise_type='uncorr'):
         """
         Evaluates the error associated with the beam solutions
 
@@ -343,14 +380,8 @@ class BeamOnly():
             'corr' considers correlation between all the flux measurements.
             Default is 'uncorr'.
         """
-        A = self.get_A(ls)
-        # evaluating (AtN^-1A)^-1
-        A_n = (A - np.min(A))/(np.max(A) - np.min(A))
-        noise = self.get_noise_matrix(noise_type=noise_type)
-        inv_noise = np.linalg.inv(noise)
-        AtNA = np.dot(np.dot(A_n[:, :, 0].T.conj(), inv_noise), A_n[:, :, 0])
-        #AtNA = np.dot(np.dot(A[:, :, 0].T.conj(), self.get_noise_matrix()), A[:, :, 0])
-        beam_error = np.diag(np.linalg.inv(AtNA))
+        AtNiAi = self._eval_error(ls, noise_type)
+        beam_error = np.diag(np.linalg.inv(AtNiAi))
         beam_error_mat = np.zeros((self.bm_pix**2), dtype=float)
         for ii, key in enumerate(list(sol.keys())):
             if key[0] == 'b':

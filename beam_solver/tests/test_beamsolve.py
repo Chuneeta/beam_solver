@@ -253,6 +253,26 @@ class Test_BeamOnly():
         sol = bms.solve()
         nt.assert_true(sol['b{}'.format(bms.unravel_pix(31, (15, 15)))], 1.0) 
 
+        fluxval = np.array([2.0])
+        catd = gen_catdata_zensrc(fluxval, sigma=2)
+        bms = bs.BeamOnly(cat=catd, bm_pix=31)
+        bms.add_eqs(catalog_flux=fluxval)
+        sol = bms.solve(mode='pinv')
+        nt.assert_true(sol['b{}'.format(bms.unravel_pix(31, (15, 15)))], 1.0)
+
+    def test_noisy_sol_values(self):
+        azalt = np.array([[[np.pi, np.pi, np.pi, np.pi]], [[np.pi, np.pi, np.pi, np.pi]]])
+        cat_sim = create_catdata(azalt, np.array([[[3.,3.,3., 3]]]), np.array([[[.1,.2,.1, .1]]]), 1, 4)
+        bms = bs.BeamOnly(cat_sim, bm_pix=31)
+        bms.add_eqs(catalog_flux=np.array([3]))
+        sol = bms.solve(noise=True, noise_type='partial')
+        nt.assert_true(sol['b464'], 0.5)
+        nt.assert_true(sol['b495'], 0.5)
+
+        sol = bms.solve(mode='pinv', noise=True, noise_type='partial')
+        nt.assert_true(sol['b464'], 0.5)
+        nt.assert_true(sol['b495'], 0.5)
+
     def test_solve_src(self):
         fluxval = np.array([2.0])
         catd = gen_catdata_zensrc(fluxval, sigma=2)
@@ -355,7 +375,7 @@ class Test_BeamOnly():
         bms = bs.BeamOnly(cat=catd, bm_pix=31)
         bms.add_eqs(catalog_flux=fluxvals)
         sol = bms.solve()
-        beam_error = bms.eval_error(sol, bms.ls)
+        beam_error = bms.eval_beam_error(sol, bms.ls)
         nt.assert_equal(beam_error.shape, (31, 31))
 
 class Test_BeamCat():
