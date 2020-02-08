@@ -147,11 +147,9 @@ class BeamOnly():
         Builds linsolve solver
         """
         if not noise is None:
-            print  ('Yupiii')
             N = self.get_noise_matrix(noise_type=kwargs['noise_type'])
             self.ls = linsolve.LinearSolverNoise(self.eqs, N, **self.consts)
-        else:
-            
+        else: 
             self.ls = linsolve.LinearSolver(self.eqs, **self.consts)
 
     def get_A(self, ls):
@@ -381,7 +379,7 @@ class BeamOnly():
             Default is 'uncorr'.
         """
         AtNiAi = self._eval_error(ls, noise_type)
-        beam_error = np.diag(np.linalg.inv(AtNiAi))
+        beam_error = np.diag(AtNiAi)
         beam_error_mat = np.zeros((self.bm_pix**2), dtype=float)
         for ii, key in enumerate(list(sol.keys())):
             if key[0] == 'b':
