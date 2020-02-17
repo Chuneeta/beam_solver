@@ -5,6 +5,7 @@ import time
 from collections import OrderedDict
 from scipy.sparse.linalg import inv
 from scipy.sparse import csc_matrix
+from tridiag_mat import inversion as tinv
 
 class BeamOnly():
     def __init__(self, cat=None, bm_pix=61):
@@ -281,7 +282,7 @@ class BeamOnly():
         """
         noise_n = len(self.sigma)
         noise_array = np.zeros((noise_n, noise_n))
-        np.fill_diagonal(noise_array, [self.sigma[key] for key in self.sigma.keys()])
+        np.fill_diagonal(noise_array, [1 / self.sigma[key]**2 for key in self.sigma.keys()])
         return noise_array.T
 
     def _partial_corr_noise_matrix(self):
@@ -295,8 +296,8 @@ class BeamOnly():
         # filling diagonals
         np.fill_diagonal(noise_array, [self.sigma[key] for key in keys])
         # filling off-diagonal terms
-        np.fill_diagonal(noise_array[1:], [0.5 * self.sigma[keys[i]] for i in range(len(keys))])
-        np.fill_diagonal(noise_array[:, 1:], [0.5 * self.sigma[keys[1:][i]] for i in range(len(keys) - 1)]) 
+        np.fill_diagonal(noise_array[1:], [0.5 * 1 / self.sigma[keys[i]]**2 for i in range(len(keys))])
+        np.fill_diagonal(noise_array[:, 1:], [0.5 * 1 / self.sigma[keys[1:][i]]**2 for i in range(len(keys) - 1)]) 
         return noise_array.T
 
     def _full_corr_noise_matrix(self):
@@ -306,7 +307,7 @@ class BeamOnly():
         """
         noise_n = len(self.sigma)
         noise_array = np.zeros((noise_n, noise_n))
-        row0 = [self.sigma[key] for key in self.sigma.keys()]
+        row0 = [1 / self.sigma[key]**2 for key in self.sigma.keys()]
         noise_array = np.repeat(row0, noise_n)
         noise_array = noise_array.reshape((noise_n, noise_n))
         return noise_array.T
@@ -351,8 +352,12 @@ class BeamOnly():
         An = (A - np.min(A))/(np.max(A) - np.min(A))
         An_sparse = csc_matrix(A[:, :, 0])
         N = self.get_noise_matrix(noise_type=noise_type)
-        N_sparse = csc_matrix(N)
-        Ninv = inv(N_sparse)
+        if noise_type == 'partial':
+            Ninv = tinv.get_approx_inverse(N)
+            Ninv = csc_matrix(Ninv)
+        else:
+            N_sparse = csc_matrix(N)
+            Ninv = inv(N_sparse)
         At = An_sparse.T
         AtNi = At.dot(Ninv)
         AtNiA = AtNi.dot(An_sparse)
