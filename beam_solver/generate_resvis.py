@@ -7,6 +7,13 @@ import copy
 import pylab
 import IPython
 
+# polarization mapping that are used in hera_cal
+pols_dict = {'xx': 'ee',
+             'xy': 'en',
+             'yx': 'ne',
+             'yy': 'nn'
+}
+
 def read_uvfile(uvfile):
     """
     Reads in  miriad file and returns the observed visibilities
@@ -108,11 +115,9 @@ def generate_residual(uvfile, uvfits, omni_calfits, abs_calfits, pol, outfile=No
     data = uvd.data_array
     flag = uvd.flag_array
 
-    #aa = hc.utils.get_aa_from_uv(uvd)
-    #info = hc.omni.aa_to_info(aa)
+    pol_hc = pols_dict[pol] # polarization convention used in heracal
     pos_dict = generate_antdict(uvd)
-    red_bls = hc.redcal.get_reds(pos_dict, pols=[pol])
-    #red_bls = np.array(info.get_reds())
+    red_bls = hc.redcal.get_reds(pos_dict, pols=[pol_hc])
     red = gr.RBL(red_bls)
 
     # selecting good antennas
@@ -125,15 +130,16 @@ def generate_residual(uvfile, uvfits, omni_calfits, abs_calfits, pol, outfile=No
     res_data = copy.deepcopy(data)
     flag_data = np.ones((flag.shape), dtype=flag.dtype)
     for mbl in mod_bls:
-        bl_grp = red[tuple(mbl) + (pol,)]
+        bl_grp = red[tuple(mbl) + (pol_hc,)]
         # somewhow the conjugate model visibilities are stored in the uvfits file
-        for bl in bl_grp:
+        for blp in bl_grp:
+            bl = (blp[0], blp[1], pol) 
             mod_data = np.conj(uvf.get_data(tuple(mbl) + (pol,)).copy())
             inds = uvd.antpair2ind(bl[0], bl[1])
             _sh1, _sh2 = mod_data.shape
             try:
-                mod_data *= omni_gains[bl[0], 'J{}'.format(pol)] * np.conj(omni_gains[bl[1], 'J{}'.format(pol)])
-                mod_data /=  abs_gains[bl[0], 'J{}'.format(pol)]  *  np.conj(abs_gains[bl[1], 'J{}'.format(pol)])
+                mod_data *= omni_gains[bl[0], 'J{}'.format(pol_hc)] * np.conj(omni_gains[bl[1], 'J{}'.format(pol_hc)])
+                mod_data /=  abs_gains[bl[0], 'J{}'.format(pol_hc)]  *  np.conj(abs_gains[bl[1], 'J{}'.format(pol_hc)])
                 data_bl = uvd.get_data(bl)
                 residual = data_bl - mod_data
                 res_data[inds, :, :, :] = residual.reshape((_sh1, 1, _sh2, 1))
