@@ -381,7 +381,7 @@ class catData(object):
                 interp_func_d = self._interpolate_data(ha, data, kind=kind, bounds_error=bounds_error)
                 interp_func_e = self._interpolate_data(ha, error, kind=kind, bounds_error=bounds_error)
                 data_array[p, i, :] = interp_func_d(ha_array[i, :])
-                error_array[p, i, :] = interp_func_e(ha_array[i, :])
+                error_array[p, i, :] = interp_func_e(ha_array[i, :]) 
         
         self.data_array = data_array
         self.azalt_array = azalt_array

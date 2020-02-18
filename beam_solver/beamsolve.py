@@ -5,7 +5,6 @@ import time
 from collections import OrderedDict
 from scipy.sparse.linalg import inv
 from scipy.sparse import csc_matrix
-from tridiag_mat import inversion as tinv
 
 class BeamOnly():
     def __init__(self, cat=None, bm_pix=61):
@@ -352,12 +351,9 @@ class BeamOnly():
         An = (A - np.min(A))/(np.max(A) - np.min(A))
         An_sparse = csc_matrix(A[:, :, 0])
         N = self.get_noise_matrix(noise_type=noise_type)
-        if noise_type == 'partial':
-            Ninv = tinv.get_approx_inverse(N)
-            Ninv = csc_matrix(Ninv)
-        else:
-            N_sparse = csc_matrix(N)
-            Ninv = inv(N_sparse)
+        Ninv = csc_matrix(Ninv)
+        N_sparse = csc_matrix(N)
+        Ninv = inv(N_sparse)
         At = An_sparse.T
         AtNi = At.dot(Ninv)
         AtNiA = AtNi.dot(An_sparse)
