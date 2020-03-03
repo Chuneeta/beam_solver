@@ -317,7 +317,7 @@ def subtract_model(dset, script='subtract_mod', operation='subtract', delete=Fal
     #task_opt += "data = ms.getcol('CORRECTED_DATA') if 'CORRECTED_DATA' in ms.colnames() else ms.getcol('DATA')\n"
     task_opt += "   if operation == 'add':\n"
     task_opt += "       ms.putcol(datacol, data + ms.getcol('MODEL_DATA'))\n"
-    task_opt += "   else\n"
+    task_opt += "   else:\n"
     task_opt += "       ms.putcol(datacol, data - ms.getcol('MODEL_DATA'))\n"
     task_opt += "ms.close()"
     stdout = open(script + ".py", "w")
