@@ -101,7 +101,7 @@ class Imaging(object):
             If True, overwrites the existing image with the new one.
             Default is False.
         """
-        input_image = imagename + '.image'
+        input_image = imagename
         ct.exportfits(input_image, fitsname=fitsname, script=script, overwrite=overwrite)
 
     def plot_image(self, fitsfile, cmap='gray', vmin=None, vmax=None, title=''):
@@ -155,3 +155,4 @@ class Imaging(object):
         os.system('rm -rf *.log~')
         os.system('rm -rf *.last')
         os.system('rm -rf *.last~')
+

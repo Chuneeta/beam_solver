@@ -205,9 +205,7 @@ def generate_complist_input(ras, decs, fluxs, sindex, freqs, flux_unit='Jy', fre
         freqs = freqs * 1e3
     stdout = open(output, 'wb')
     for ii, ra in enumerate(ras):
-        print (ra)
         ra_str = cd.deg2hms(ra)
-        print (ra_str)
         dec_str = cd.deg2dms(decs[ii])
         text = ('J2000 {} {}: {}: {}: {}\n'.format(ra_str, dec_str, fluxs[ii], sindex[ii], freqs[ii])).encode()
         stdout.write(text)
@@ -309,15 +307,35 @@ def transferto(dset, column_from, column_to, script='transferto', delete=False):
     stdout.close()
     casawrapper.call_casa_script(script + ".py", casa_opt, delete=delete)
 
-def subtract_model(dset, script='subtract_mod', delete=False):
+def subtract_model(dset, script='subtract_mod', operation='subtract', delete=False):
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
     task_opt = "ms = casac.table()\n"
     task_opt += "ms.open('{}', nomodify=False)\n".format(dset)
+    task_opt += "datacol = 'CORRECTED_DATA' if 'CORRECTED_DATA' in ms.colnames() else 'DATA'\n"
+    task_opt += "data = ms.getcol(datacol)\n"
     task_opt += "if 'MODEL_DATA' in ms.colnames():\n"
-    task_opt += "   data = ms.getcol('CORRECTED_DATA') if 'CORRECTED_DATA' in ms.colnames() else ms.getcol('DATA')\n"
-    task_opt += "   ms.putcol('DATA', data - ms.getcol('MODEL_DATA'))\n"
+    #task_opt += "data = ms.getcol('CORRECTED_DATA') if 'CORRECTED_DATA' in ms.colnames() else ms.getcol('DATA')\n"
+    task_opt += "   if operation == 'add':\n"
+    task_opt += "       ms.putcol(datacol, data + ms.getcol('MODEL_DATA'))\n"
+    task_opt += "   else\n"
+    task_opt += "       ms.putcol(datacol, data - ms.getcol('MODEL_DATA'))\n"
     task_opt += "ms.close()"
     stdout = open(script + ".py", "w")
     stdout.write(task_opt)
     stdout.close()
     casawrapper.call_casa_script(script + ".py", casa_opt, delete=delete)
+
+def gaincal(dset, caltable, solint='30s', gaintype='G', usescratch=True, script='gaincal', delete=False):
+    casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
+    task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), gaintype="'{}'".format(gaintype), solint="'{}'".format(solint), caltable="'{}'".format(caltable), usescratch="'{}'".format(usescratch)) 
+    casawrapper.call_casa_task(task='gaincal', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
+
+def applycal(dset, gaintable, script='applycal', delete=False):
+    casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
+    task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), gaintable="'{}'".format(gaintable))
+    casawrapper.call_casa_task(task='applycal', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
+
+def concat(dsets, outfile, script='concat', delete=False):
+    casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
+    task_opt = casawrapper.create_casa_options(vis="{}".format(dsets), concatvis="'{}'".format(outfile))
+    casawrapper.call_casa_task(task='concat', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
