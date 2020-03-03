@@ -17,7 +17,7 @@ def get_fitsinfo(fitsfile):
 
 def _get_wcs(fitsfile):
     """
-    Retruns the world coordinate system class
+    Returns the world coordinate system class
     """
     return wcs.WCS(fitsfile)
 
@@ -82,4 +82,28 @@ def get_fitstats(fitsfile):
     _info = get_fitsinfo(fitsfile)
     data = _info['data']
     return {'max': np.nanmax(data), 'min': np.nanmin(data), 'std': np.nanstd(data)}
+
+def write_fits(fitsfile, data, outfile, overwrite=False):
+    """
+    Overwrite exisiting file with new data keeping the old metadata
+    fitsfile: Input fitsfile
+    data: Ndarray containing the new values, can be float or ints
+    outfile: name output fitsfile
+    overwrite: Overwrite is set to False
+    """
+    _info = get_fitsinfo(fitsfile)
+    fits.writeto(outfile, data, _info['hdr'], overwrite=overwrite)
+
+def calc_solint(fitsfile, nants, inttime):
+    """
+    Return solution interval used for self-caibration, should be greater than the
+    interval returned by the function
+    fitsfile: Name of input fitsfile
+    nants :  Number of antennas in the array layout
+    inttime: Integration in seconds of the observation
+    """
+    stats_dict = get_fitstats(fitsfile)
+    mxval, mnval, std = stats_dict['max'], stats_dict['min'], stats_dict['std']
+    solint = (std / mxval)**2 * (inttime * (nants - 3)) / 9
+    return solint
 
