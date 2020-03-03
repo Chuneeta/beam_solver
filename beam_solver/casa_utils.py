@@ -310,7 +310,7 @@ def transferto(dset, column_from, column_to, script='transferto', delete=False):
 def subtract_model(dset, script='subtract_mod', operation='subtract', delete=False):
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
     task_opt = "operation={}\n".format(operation)
-    task_opt = "ms = casac.table()\n"
+    task_opt += "ms = casac.table()\n"
     task_opt += "ms.open('{}', nomodify=False)\n".format(dset)
     task_opt += "datacol = 'CORRECTED_DATA' if 'CORRECTED_DATA' in ms.colnames() else 'DATA'\n"
     task_opt += "data = ms.getcol(datacol)\n"
