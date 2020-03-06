@@ -49,7 +49,6 @@ def ms2uvfits(dset, outfile=None, script='ms2uvfits', overwrite=False, delete=Tr
     print ('Converting {} to {}'.format(dset, outfile))
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
     task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), fitsfile="'{}'".format(outfile), overwrite="{}".format(overwrite))
-    print ('task_opt:', task_opt)
     casawrapper.call_casa_task(task='exportuvfits', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
     
 def flag_antenna(dset, antenna, script='flag_a', delete=True):
@@ -320,6 +319,32 @@ def subtract_model(dset, script='subtract_mod', operation='subtract', delete=Fal
     task_opt += "       ms.putcol(datacol, data + ms.getcol('MODEL_DATA'))\n"
     task_opt += "   else:\n"
     task_opt += "       ms.putcol(datacol, data - ms.getcol('MODEL_DATA'))\n"
+    task_opt += "ms.close()"
+    stdout = open(script + ".py", "w")
+    stdout.write(task_opt)
+    stdout.close()
+    casawrapper.call_casa_script(script + ".py", casa_opt, delete=delete)
+
+def subtract_model_ant(dset, ant, script='subtract_mod_ant', operation='subtract', delete=False):
+    casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
+    task_opt = "import numpy as np; import copy\n"
+    task_opt += "operation='{}'\n".format(operation)
+    task_opt += "ms = casac.table()\n"
+    task_opt += "ms.open('{}', nomodify=False)\n".format(dset)
+    task_opt += "datacol = 'CORRECTED_DATA' if 'CORRECTED_DATA' in ms.colnames() else 'DATA'\n"
+    task_opt += "data = ms.getcol(datacol)\n"
+    task_opt += "model = ms.getcol('MODEL_DATA')\n"
+    task_opt += "A1 = ms.getcol('ANTENNA1')\n"
+    task_opt += "inds = np.where(A1=={})\n".format(ant)
+    task_opt += "data_bl = data[:, :, inds[0]]\n"
+    task_opt += "mod_bl = model[:, :, inds[0]]\n"
+    task_opt += "new_data = copy.deepcopy(data)\n"
+    task_opt += "if operation == 'add':\n"
+    task_opt += "   new_data[:, :, inds[0]] = data_bl + mod_bl\n"
+    task_opt += "   ms.putcol(datacol, new_data)\n"
+    task_opt += "else:\n"
+    task_opt += "   new_data[:, :, inds[0]] = data_bl - mod_bl\n"
+    task_opt += "   ms.putcol(datacol, new_data)\n"
     task_opt += "ms.close()"
     stdout = open(script + ".py", "w")
     stdout.write(task_opt)
