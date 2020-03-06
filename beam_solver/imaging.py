@@ -1,5 +1,7 @@
 from beam_solver import casa_utils as ct
 from beam_solver import fits_utils as ft
+from beam_solver import extract as et
+from beam_solver import coord_utils as cd
 from astropy.io import fits
 from astropy import wcs
 import numpy as np
@@ -156,3 +158,80 @@ class Imaging(object):
         os.system('rm -rf *.last')
         os.system('rm -rf *.last~')
 
+class Subtract(Imaging):
+    def __init__(self, ms, srcdict=None):
+        """
+        Object to store measurement sets of meausrement files containing visibilities and performs
+        operations such as imaging.
+        Parameters
+        ----------
+        ms : str
+            Input Measurement set file containing visibilities are required metadata.
+        imagename : str
+            Name of output casa image.
+         srcdict : dict
+            Dictionary with the position of sources in the format below
+                srcdict = {srcnum: (ra, dec)}
+                e.g srcdict = {1: ('3:52:52.61', '-27:20:2.86')}
+        """
+        Imaging.__init__(self, ms)
+        self.srcdict = srcdict
+
+    def make_image(self, imagename, fitsname, niter=500, antenna='', overwrite=False):
+        """
+        Returns fits image generated from the ms for any single antenna, combination of antennas or all antennas.
+        Parameters
+        ----------
+        imagename : str
+            Name of the output image
+        fitsname : str
+            Name of output fits file. By defualt, it return <imagename>.fits
+        niter : int
+            Number of deconvolution interation. By default it is 500.
+        antenna : str
+            Antenna number(s). By default it uses all the antennas
+        overwrite :  boolean
+            If True, overwrite existing image. Default is set to False
+        """           
+        self.generate_image(imagename, antenna=antenna, niter=niter)
+        self.to_fits(imagename + '.image', fitsname, overwrite=overwrite)
+        self.remove_image(imagename, del_img=True)
+        return fitsname
+
+    def srcdict_to_list(self):
+        ras = [cd.hms2deg(self.srcdict[key][0]) for key in self.srcdict.keys()]
+        decs = [cd.dms2deg(self.srcdict[key][1]) for key in self.srcdict.keys()]
+        return ras, decs
+
+    def extract_flux(self, fitsname, ras, decs):
+        return [et.get_flux(fitsname, ras[i], decs[i])['pflux'] for i in range(len(ras))]
+
+    def get_freq(self, fitsname):
+        fitsinfo = ft.get_fitsinfo(fitsname)
+        return fitsinfo['freq']        
+
+    def subtract_model(self, imagename, fitsname=None, niter=500, antenna='', maxiter=10):
+        if fitsname is None:
+            fitsname = imagename + '.fits'
+        fitsname = self.make_image(imagename, fitsname, niter=niter, antenna=antenna, overwrite=True)
+        ras, decs = self.srcdict_to_list()        
+        fluxs = self.extract_flux(fitsname, ras, decs)
+        freq = self.get_freq(fitsname)
+        # generating visibilities using ft CASA task
+        for i in range(len(ras)):
+            orig_flux = fluxs[i]
+            flux = orig_flux
+            flux0 = orig_flux
+            operation = 'add' if orig_flux < 0 else 'subtract'
+            infile = 'src_component.dat'
+            outfile = 'src_component.cl'
+            niter = 1
+            while (np.abs(flux) < 0.1 * np.abs(orig_flux) or np.abs(flux) > np.abs(flux0) or niter >= maxiter):
+                ct.generate_complist_input([ras[i]], [decs[i]], [flux], [0], [freq], output=infile)
+                ct.create_complist(infile, outfile)
+                ct.ft(self.ms, complist=outfile)
+                ct.subtract_model_ant(self.ms, antenna, operation=operation)
+                fitsname = self.make_image(imagename, fitsname, niter=niter, antenna=antenna, overwrite=True)
+                flux0 = flux # flux obtained at previous iteration
+                flux = self.extract_flux(fitsname, ras[i], decs[i])
+                niter += 1
