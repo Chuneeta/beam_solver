@@ -226,12 +226,12 @@ class Subtract(Imaging):
             infile = 'src_component.dat'
             outfile = 'src_component.cl'
             niter = 1
-            while (np.abs(flux) < 0.1 * np.abs(orig_flux) or np.abs(flux) > np.abs(flux0) or niter >= maxiter):
-                ct.generate_complist_input([ras[i]], [decs[i]], [flux], [0], [freq], output=infile)
+            while (np.abs(flux) >= 0.1 * np.abs(orig_flux) and np.abs(flux) <= np.abs(flux0) and niter <= maxiter):
+                ct.generate_complist_input([ras[i]], [decs[i]], [np.abs(flux)], [0], [freq], output=infile)
                 ct.create_complist(infile, outfile)
                 ct.ft(self.ms, complist=outfile)
                 ct.subtract_model_ant(self.ms, antenna, operation=operation)
                 fitsname = self.make_image(imagename, fitsname, niter=niter, antenna=antenna, overwrite=True)
                 flux0 = flux # flux obtained at previous iteration
-                flux = self.extract_flux(fitsname, ras[i], decs[i])
+                flux = self.extract_flux(fitsname, [ras[i]], [decs[i]])[0]
                 niter += 1
