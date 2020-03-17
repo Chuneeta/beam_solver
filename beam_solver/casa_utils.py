@@ -71,7 +71,7 @@ def flag_antenna(dset, antenna, script='flag_a', delete=True):
     task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), antenna="'{}'".format(antenna))
     casawrapper.call_casa_task(task='flagdata', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
 
-def imaging(dset, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0, gridmode='', wprojplanes=1024, script='clean', delete=True):
+def imaging(dset, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0, phasecenter='', gridmode='', wprojplanes=1024, script='clean', delete=True):
     """
     Generates images using all antenna or specific antennas using visibilities from the measurement set (MS)
 
@@ -108,6 +108,8 @@ def imaging(dset, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, 
         Stopping/endign frequency channel. Default is 900.
     uvlength: float
         Uv length in metres equal to or smaller to exclude while generating the image. Default is 0.
+    phasecenter: string
+        Pointing center of the image
     gridmode: string
         Gridding kernel for FFT-based transforms
     wprojplanes : int
@@ -121,7 +123,7 @@ def imaging(dset, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, 
     antenna_out = 'all' if antenna == '' else antenna
     print ('Imaging using antenna(s) {}'.format(antenna_out))
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
-    task_opt = casawrapper.create_casa_options(vis=vis, imagename="'{}'".format(imagename), antenna="'{}'".format(antenna), cell="'{}'".format(cellsize), imsize=[npix,npix], threshold="'{}'".format(threshold), niter="{}".format(niter), spw="'0:{}~{}'".format(start, stop), uvrange="'>{}'".format(uvlength), weighting="'{}'".format(weighting), gridmode="'{}'".format(gridmode), wprojplanes="{}".format(wprojplanes), usescratch=True)
+    task_opt = casawrapper.create_casa_options(vis=vis, imagename="'{}'".format(imagename), antenna="'{}'".format(antenna), cell="'{}'".format(cellsize), imsize=[npix,npix], threshold="'{}'".format(threshold), niter="{}".format(niter), spw="'0:{}~{}'".format(start, stop), uvrange="'>{}'".format(uvlength), weighting="'{}'".format(weighting), phasecenter="'{}'".format(phasecenter) ,gridmode="'{}'".format(gridmode), wprojplanes="{}".format(wprojplanes), usescratch=True)
     casawrapper.call_casa_task(task='clean', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)    
 
 def exportfits(imagename, fitsname=None, overwrite=False, script='exportfits', delete=True):
@@ -238,7 +240,7 @@ def create_complist(infile, outfile='component.cl', script='create_cl', delete=F
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
     casawrapper.call_casa_script(script + '.py', casa_opts=casa_opt, delete=delete)
 
-def ft(dset, complist=None, model=None, script='ft', delete=False):
+def ft(dset, complist=None, model=None, start=200, stop=900, script='ft', delete=False):
     """
     Fourier transforming model (complist) and writing the resulting visibilities into the MODEL column
     Parameters
@@ -257,11 +259,11 @@ def ft(dset, complist=None, model=None, script='ft', delete=False):
     """
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
     if complist is None and model is None:
-        task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), usescratch=True)
+        task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), spw="'0:{}~{}'".format(start, stop), usescratch=True)
     elif not complist is None:
-        task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), complist="'{}'".format(complist ), usescratch=True)
+        task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), complist="'{}'".format(complist), spw="'0:{}~{}'".format(start, stop), usescratch=True)
     elif not model is None:
-        task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), model="'{}'".format(model), usescratch=True)
+        task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), model="'{}'".format(model), spw="'0:{}~{}'".format(start, stop), usescratch=True)
     else:
         raise ValueError('Need to specify model input.')
     casawrapper.call_casa_task(task='ft', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)

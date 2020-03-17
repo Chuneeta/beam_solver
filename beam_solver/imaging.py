@@ -28,7 +28,7 @@ class Imaging(object):
         """
         ct.flag_antenna(self.ms, antenna)
 
-    def generate_image(self, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0, gridmode='', wprojplanes=1024, script='clean', del_script=True):
+    def generate_image(self, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0, phasecenter='', gridmode='', wprojplanes=1024, script='clean', del_script=True):
         """
         Generates multi-frequency synthesized images using all baselines within the specified cutoff threshold
 
@@ -62,6 +62,8 @@ class Imaging(object):
             Stopping/endign frequency channel. Default is 900.
         uvlength: float
             UV length in metres equal to or smaller to exclude while generating the image. Default is 0.        
+        phasecenter: str
+            Pointing center of the image
         gridmode: string
             Gridding kernel for FFT-based transforms
     wprojplanes : int
@@ -70,7 +72,7 @@ class Imaging(object):
             If True, deletes the casa script used to execute the CASA clean task.
             Default is True.
         """
-        ct.imaging(self.ms, imagename, antenna=antenna, cellsize=cellsize, npix=npix, niter=niter, threshold=threshold, weighting=weighting, start=start, stop=stop, uvlength=uvlength, gridmode=gridmode, wprojplanes=wprojplanes, script=script, delete=del_script)
+        ct.imaging(self.ms, imagename, antenna=antenna, cellsize=cellsize, npix=npix, niter=niter, threshold=threshold, weighting=weighting, start=start, stop=stop, uvlength=uvlength, phasecenter=phasecenter, gridmode=gridmode, wprojplanes=wprojplanes, script=script, delete=del_script)
             
     def remove_image(self, imagename, del_img=False):
         """
@@ -177,7 +179,7 @@ class Subtract(Imaging):
         Imaging.__init__(self, ms)
         self.srcdict = srcdict
 
-    def make_image(self, imagename, fitsname, niter=500, antenna='', overwrite=False):
+    def make_image(self, imagename, fitsname, niter=500, antenna='', phasecenter='', start=200, stop=900, del_img=True, overwrite=False):
         """
         Returns fits image generated from the ms for any single antenna, combination of antennas or all antennas.
         Parameters
@@ -193,7 +195,7 @@ class Subtract(Imaging):
         overwrite :  boolean
             If True, overwrite existing image. Default is set to False
         """           
-        self.generate_image(imagename, antenna=antenna, niter=niter)
+        self.generate_image(imagename, antenna=antenna, niter=niter, phasecenter=phasecenter, start=start, stop=stop)
         self.to_fits(imagename + '.image', fitsname, overwrite=overwrite)
         self.remove_image(imagename, del_img=True)
         return fitsname
@@ -204,17 +206,24 @@ class Subtract(Imaging):
         return ras, decs
 
     def extract_flux(self, fitsname, ras, decs):
-        return [et.get_flux(fitsname, ras[i], decs[i])['pflux'] for i in range(len(ras))]
-
+        return [et.get_flux(fitsname, ras[i], decs[i])['gauss_pflux'] for i in range(len(ras))]
+    
     def get_freq(self, fitsname):
         fitsinfo = ft.get_fitsinfo(fitsname)
         return fitsinfo['freq']        
 
-    def subtract_model(self, imagename, fitsname=None, niter=500, antenna='', maxiter=10):
+    def _cons_phase_cente(self, ra, dec):
+        ra_l = ra.split(':')
+        ra_s = '{}h{}m{}s'.format(ra_l[0], ra_l[1], ra_l[2])
+        dec_l = dec.split(':')
+        dec_s = '{}d{}m{}s'.format(dec_l[0], dec_l[1], dec_l[2])
+        return 'J2000 {} {}'.format(ra_s, dec_s)
+
+    def subtract_model(self, imagename, fitsname=None, niter=500, antenna='', start=200, stop=900, maxiter=20):
         if fitsname is None:
             fitsname = imagename + '.fits'
-        fitsname = self.make_image(imagename, fitsname, niter=niter, antenna=antenna, overwrite=True)
-        ras, decs = self.srcdict_to_list()        
+        fitsname = self.make_image(imagename, fitsname, niter=niter, antenna=antenna, start=start, stop=stop, overwrite=True)
+        ras, decs = self.srcdict_to_list()
         fluxs = self.extract_flux(fitsname, ras, decs)
         freq = self.get_freq(fitsname)
         # generating visibilities using ft CASA task
@@ -225,13 +234,14 @@ class Subtract(Imaging):
             operation = 'add' if orig_flux < 0 else 'subtract'
             infile = 'src_component.dat'
             outfile = 'src_component.cl'
-            niter = 1
-            while (np.abs(flux) >= 0.1 * np.abs(orig_flux) and np.abs(flux) <= np.abs(flux0) and niter <= maxiter):
-                ct.generate_complist_input([ras[i]], [decs[i]], [np.abs(flux)], [0], [freq], output=infile)
+            iter_num = 1
+            while (np.abs(flux) >= 0.1 * np.abs(orig_flux) and np.abs(flux) <= np.abs(flux0) and iter_num <= maxiter):
+                ct.generate_complist_input([ras[i]], [decs[i]], [np.abs(flux)], [0], [freq * 1e-6], output=infile)
                 ct.create_complist(infile, outfile)
-                ct.ft(self.ms, complist=outfile)
+                ct.ft(self.ms, complist=outfile, start=start, stop=stop)
                 ct.subtract_model_ant(self.ms, antenna, operation=operation)
-                fitsname = self.make_image(imagename, fitsname, niter=niter, antenna=antenna, overwrite=True)
+                fitsname = self.make_image(imagename, fitsname, niter=niter, antenna=antenna, start=start, stop=stop, overwrite=True)
                 flux0 = flux # flux obtained at previous iteration
                 flux = self.extract_flux(fitsname, [ras[i]], [decs[i]])[0]
                 niter += 1
+
