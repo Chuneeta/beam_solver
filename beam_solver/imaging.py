@@ -243,5 +243,6 @@ class Subtract(Imaging):
                 fitsname = self.make_image(imagename, fitsname, niter=niter, antenna=antenna, start=start, stop=stop, overwrite=True)
                 flux0 = flux # flux obtained at previous iteration
                 flux = self.extract_flux(fitsname, [ras[i]], [decs[i]])[0]
-                niter += 1
+                iter_num += 1
+                print (flux0, flux)
 
