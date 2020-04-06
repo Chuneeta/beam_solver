@@ -367,3 +367,17 @@ def concat(dsets, outfile, script='concat', delete=False):
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
     task_opt = casawrapper.create_casa_options(vis="{}".format(dsets), concatvis="'{}'".format(outfile))
     casawrapper.call_casa_task(task='concat', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
+
+def set_to_unflag(dset, script='unflag', delete=False):
+    casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
+    task_opt = "import numpy as np\n"
+    task_opt += "ms = casac.table()\n"
+    task_opt += "ms.open('{}', nomodify=False)\n".format(dset)
+    task_opt += "flags = ms.getcol('FLAG')\n"
+    task_opt += "new_flags = np.zeros(flags.shape, dtype=np.bool)\n"
+    task_opt += "ms.putcol('FLAG', new_flags)\n"
+    task_opt += "ms.close()"
+    stdout = open(script + ".py", "w")
+    stdout.write(task_opt)
+    stdout.close()
+    casawrapper.call_casa_script(script + ".py", casa_opt, delete=delete)
