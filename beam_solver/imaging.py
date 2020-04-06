@@ -244,5 +244,24 @@ class Subtract(Imaging):
                 flux0 = flux # flux obtained at previous iteration
                 flux = self.extract_flux(fitsname, [ras[i]], [decs[i]])[0]
                 iter_num += 1
-                print (flux0, flux)
 
+    def subtract_sources(self, ra, dec, pflux, imagename, fitsname=None, niter=0, antenna='', start=200, stop=900, gain=0.3, maxiter=10, overwrite=True):
+        if fitsname is None:
+            fitsname = imagename + '.fits'
+        fitsname = self.make_image(imagename, fitsname, niter=niter, antenna=antenna, start=start, stop=stop, overwrite=True)
+        resflux = self.extract_flux(fitsname, [ra], [dec])[0]
+        freq = self.get_freq(fitsname)
+        operation = 'add' if resflux < 0 else 'subtract'
+        infile = 'src_component.dat'
+        outfile = 'src_component.cl'
+        iter_num = 1
+        print ('Iteration {}: {} Jy -- {}% of observed flux'.format(iter_num, resflux, round(abs(resflux * 100 / pflux)), 2))
+        while ((np.abs(resflux) > 1 / 10. * pflux) and (iter_num < maxiter)):
+            ct.generate_complist_input([ra], [dec], [gain * np.abs(resflux)], [0], [freq * 1e-6], output=infile)
+            ct.create_complist(infile, outfile)
+            ct.ft(self.ms, complist=outfile, start=start, stop=stop)
+            ct.subtract_model_ant(self.ms, antenna, operation=operation)
+            fitsname = self.make_image(imagename, fitsname, niter=niter, antenna=antenna, start=start, stop=stop, overwrite=True)
+            resflux = self.extract_flux(fitsname, [ra], [dec])[0]
+            iter_num += 1
+            print ('Iteration {}: {} Jy -- {}% of observed flux'.format(iter_num, resflux, round(abs(resflux * 100 / pflux)), 2))
