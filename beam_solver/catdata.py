@@ -153,6 +153,7 @@ class catData(object):
         data_array = np.zeros((nsrcs, nfits))
         azalt_array = np.zeros((2, nsrcs, nfits))
         jds = self._get_jds(fitsfiles)
+        srcdict['jds'] = jds
         for i, ra in enumerate(ras):
             key = (round(ra, 2), round(decs[i], 2))
             if not key in srcdict: srcdict[key] = {}
@@ -181,7 +182,9 @@ class catData(object):
             Dictionary containing the data and metadata about the astronomical sources.
         """ 
         # saving attributes to object
+        jds = srcdict['jds']
         keys = list(srcdict.keys())
+        keys.remove('jds')
         self.pos_array = keys
         _sh1 = len(keys)
         _sh = srcdict[keys[0]]['data'].shape
@@ -198,6 +201,7 @@ class catData(object):
             self.error_array[:, i, :] = srcdict[key]['error']
             self.ha_array[i, :] = srcdict[key]['ha']
             self.azalt_array[:, i, :] = srcdict[key]['azalt']
+        self.jd_array = np.array(jds)
         self.Nsrcs = _sh1
         self.Nfits = _sh2
 
@@ -439,6 +443,7 @@ class catData(object):
             mgp['error_array'] = self.error_array
             mgp['pos_array'] = self.pos_array
             mgp['azalt_array'] = self.azalt_array
+            mgp['jd_array'] = self.jd_array
             # write data to file
             dgp = f.create_group('Data')
             dgp.create_dataset('data_array', chunks=True, data=self.data_array)
@@ -461,6 +466,7 @@ class catData(object):
             self.error_array = mgp['error_array'].value
             self.pos_array = mgp['pos_array'].value
             self.azalt_array = mgp['azalt_array'].value
+            self.jd_array = mgp['jd_array'].value
             # read data
             dgp = f['Data']
             self.data_array = dgp['data_array'].value
