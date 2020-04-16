@@ -243,7 +243,7 @@ class Subtract(Imaging):
                 flux = self.extract_flux(fitsname, [ras[i]], [decs[i]])[0]
                 iter_num += 1
 
-    def subtract_sources(self, ra, dec, pflux, imagename, fitsname=None, niter=0, antenna='', start=200, stop=900, npix=30, gain=0.3, maxiter=10):
+    def subtract_sources(self, ra, dec, pflux, imagename, fitsname=None, niter=0, antenna='', start=200, stop=900, npix=30, gain=0.3, maxiter=10, return_val=False):
         if fitsname is None:
             fitsname = imagename + '.fits'
         phasecenter = self.const_phase_center(ra, dec)
@@ -275,3 +275,5 @@ class Subtract(Imaging):
             resflux = stats['gauss_tflux']
             niter += 1
             print ('Iteration {}: {} Jy -- {}% of observed flux'.format(iter_num, resflux, round(abs(resflux * 100 / np.abs(pflux))), 2))
+        if return_val:
+            return np.abs(flux0) * 100 / np.abs(pflux)
