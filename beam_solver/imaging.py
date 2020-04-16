@@ -1,7 +1,7 @@
 from beam_solver import casa_utils as ct
 from beam_solver import fits_utils as ft
 from beam_solver import extract as et
-from beam_solver import coord_utils as cd
+from beam_solver import coord_utils as crd
 from astropy.io import fits
 from astropy import wcs
 import numpy as np
@@ -197,8 +197,8 @@ class Subtract(Imaging):
         """           
         self.generate_image(imagename, antenna=antenna, niter=niter, phasecenter=phasecenter, start=start, stop=stop)
         self.to_fits(imagename + '.image', fitsname, overwrite=overwrite)
-        self.remove_image(imagename, del_img=True)
-        return fitsname
+        if del_img:
+            self.remove_image(imagename, del_img=True)
 
     def srcdict_to_list(self):
         ras = [cd.hms2deg(self.srcdict[key][0]) for key in self.srcdict.keys()]
@@ -212,17 +212,15 @@ class Subtract(Imaging):
         fitsinfo = ft.get_fitsinfo(fitsname)
         return fitsinfo['freq']        
 
-    def _cons_phase_cente(self, ra, dec):
-        ra_l = ra.split(':')
-        ra_s = '{}h{}m{}s'.format(ra_l[0], ra_l[1], ra_l[2])
-        dec_l = dec.split(':')
-        dec_s = '{}d{}m{}s'.format(dec_l[0], dec_l[1], dec_l[2])
-        return 'J2000 {} {}'.format(ra_s, dec_s)
+    def const_phase_center(self, ra, dec):
+        ra_str = crd.deg2hms(ra)
+        dec_str = crd.deg2dms(dec)
+        return 'J2000 {} {}'.format(ra_str, dec_str)
 
     def subtract_model(self, imagename, fitsname=None, niter=500, antenna='', start=200, stop=900, maxiter=20):
         if fitsname is None:
             fitsname = imagename + '.fits'
-        fitsname = self.make_image(imagename, fitsname, niter=niter, antenna=antenna, start=start, stop=stop, overwrite=True)
+        self.make_image(imagename, fitsname, niter=niter, antenna=antenna, start=start, stop=stop, overwrite=True)
         ras, decs = self.srcdict_to_list()
         fluxs = self.extract_flux(fitsname, ras, decs)
         freq = self.get_freq(fitsname)
@@ -240,28 +238,40 @@ class Subtract(Imaging):
                 ct.create_complist(infile, outfile)
                 ct.ft(self.ms, complist=outfile, start=start, stop=stop)
                 ct.subtract_model_ant(self.ms, antenna, operation=operation)
-                fitsname = self.make_image(imagename, fitsname, niter=niter, antenna=antenna, start=start, stop=stop, overwrite=True)
+                self.make_image(imagename, fitsname, niter=niter, antenna=antenna, start=start, stop=stop, overwrite=True)
                 flux0 = flux # flux obtained at previous iteration
                 flux = self.extract_flux(fitsname, [ras[i]], [decs[i]])[0]
                 iter_num += 1
 
-    def subtract_sources(self, ra, dec, pflux, imagename, fitsname=None, niter=0, antenna='', start=200, stop=900, gain=0.3, maxiter=10, overwrite=True):
+    def subtract_sources(self, ra, dec, pflux, imagename, fitsname=None, niter=0, antenna='', start=200, stop=900, npix=30, gain=0.3, maxiter=10):
         if fitsname is None:
             fitsname = imagename + '.fits'
-        fitsname = self.make_image(imagename, fitsname, niter=niter, antenna=antenna, start=start, stop=stop, overwrite=True)
-        resflux = self.extract_flux(fitsname, [ra], [dec])[0]
-        freq = self.get_freq(fitsname)
-        operation = 'add' if resflux < 0 else 'subtract'
-        infile = 'src_component.dat'
-        outfile = 'src_component.cl'
+        phasecenter = self.const_phase_center(ra, dec)
+        self.generate_image(imagename, antenna=antenna, niter=niter, phasecenter=phasecenter, start=start, stop=stop, npix=npix)
+        self.to_fits(imagename + '.image', fitsname, overwrite=True)
+        mod_fitsname = imagename + '.mod.fits'
+        self.to_fits(imagename + '.model', mod_fitsname, overwrite=True)
+        self.remove_image(imagename, del_img=True)
+        moddata = ft.get_fitsinfo(mod_fitsname)['data']
+        stats = et.get_flux(fitsname, ra, dec)
+        resflux = stats['gauss_tflux']
+        flux0 = resflux
+        resdata = moddata
         iter_num = 1
-        print ('Iteration {}: {} Jy -- {}% of observed flux'.format(iter_num, resflux, round(abs(resflux * 100 / pflux)), 2))
-        while ((np.abs(resflux) > 1 / 10. * pflux) and (iter_num < maxiter)):
-            ct.generate_complist_input([ra], [dec], [gain * np.abs(resflux)], [0], [freq * 1e-6], output=infile)
-            ct.create_complist(infile, outfile)
-            ct.ft(self.ms, complist=outfile, start=start, stop=stop)
-            ct.subtract_model_ant(self.ms, antenna, operation=operation)
-            fitsname = self.make_image(imagename, fitsname, niter=niter, antenna=antenna, start=start, stop=stop, overwrite=True)
-            resflux = self.extract_flux(fitsname, [ra], [dec])[0]
-            iter_num += 1
-            print ('Iteration {}: {} Jy -- {}% of observed flux'.format(iter_num, resflux, round(abs(resflux * 100 / pflux)), 2))
+        print ('Iteration {}: {} Jy -- {}% of observed flux'.format(iter_num, resflux, round(abs(resflux * 100 / np.abs(pflux))), 2))
+        while (np.abs(resflux) > 1 / 10. * np.abs(pflux) and np.abs(resflux) <= np.abs(flux0) and iter_num < maxiter):
+            pmod_fitsname = imagename + '.pmod.fits'
+            ft.write_fits(mod_fitsname, gain * resdata, pmod_fitsname, overwrite=True)
+            resdata -= gain * resdata
+            mod_imagename = mod_fitsname.replace('.fits', '.image')
+            ct.importfits(mod_fitsname, mod_imagename, overwrite=True)  
+            ct.ft(self.ms, model = mod_imagename)
+            ct.subtract_model_ant(self.ms, antenna)
+            self.generate_image(imagename, antenna=antenna, niter=0, start=start, stop=stop, npix=npix, phasecenter=phasecenter)
+            self.to_fits(imagename + '.image', fitsname, overwrite=True)
+            self.remove_image(imagename, del_img=True)
+            stats = et.get_flux(fitsname, ra, dec)
+            flux0 = resflux
+            resflux = stats['gauss_tflux']
+            niter += 1
+            print ('Iteration {}: {} Jy -- {}% of observed flux'.format(iter_num, resflux, round(abs(resflux * 100 / np.abs(pflux))), 2))
