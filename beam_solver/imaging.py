@@ -243,7 +243,7 @@ class Subtract(Imaging):
                 flux = self.extract_flux(fitsname, [ras[i]], [decs[i]])[0]
                 iter_num += 1
 
-    def subtract_sources(self, ra, dec, pflux, imagename, fitsname=None, niter=0, antenna='', start=200, stop=900, npix=30, gain=0.3, maxiter=10, return_val=False):
+    def subtract_sources(self, ra, dec, pflux, imagename, fitsname=None, niter=0, antenna='', start=200, stop=900, npix=30, gain=0.3, maxiter=10, return_val=False, ms_ext='ms'):
         if fitsname is None:
             fitsname = imagename + '.fits'
         phasecenter = self.const_phase_center(ra, dec)
@@ -252,13 +252,15 @@ class Subtract(Imaging):
         self.to_fits(imagename + '.model', mod_fitsname, overwrite=True)
         self.remove_image(imagename, del_img=True)
         moddata = ft.get_fitsinfo(mod_fitsname)['data']
-        self.generate_image(imagename, antenna=antenna, niter=0, start=start, stop=stop, npix=npix, phasecenter=phasecenter)
+        self.generate_image(imagename, antenna=antenna, niter=0, start=start, stop=stop)
+        #self.generate_image(imagename, antenna=antenna, niter=0, start=start, stop=stop, npix=npix, phasecenter=phasecenter)
         self.to_fits(imagename + '.image', fitsname, overwrite=True)
         stats = et.get_flux(fitsname, ra, dec)
         resflux = stats['gauss_tflux']
         flux0 = resflux
         resdata = moddata
         iter_num = 1
+        res_ms = self.ms.replace('.{}'.format(ms_ext), '.optsub.{}'.format(ms_ext))
         print ('Iteration {}: {} Jy -- {}% of observed flux'.format(iter_num, resflux, round(abs(resflux * 100 / np.abs(pflux))), 2))
         while (np.abs(resflux) > 1 / 10. * np.abs(pflux) and np.abs(resflux) <= np.abs(flux0) and iter_num < maxiter):
             pmod_fitsname = imagename + '.pmod.fits'
@@ -267,9 +269,11 @@ class Subtract(Imaging):
             mod_imagename = mod_fitsname.replace('.fits', '.image')
             ct.importfits(mod_fitsname, mod_imagename, overwrite=True)  
             ct.ft(self.ms, model = mod_imagename)
+            if os.path.exists(res_ms): os.system('rm -rf {}'.format(res_ms))
+            os.system('cp -rf {} {}'.format(self.ms, res_ms))
             ct.subtract_model_ant(self.ms, antenna)
             self.remove_image(imagename, del_img=True)
-            self.generate_image(imagename, antenna=antenna, niter=0, start=start, stop=stop, npix=npix, phasecenter=phasecenter)
+            self.generate_image(imagename, antenna=antenna, niter=0, start=start, stop=stop)
             self.to_fits(imagename + '.image', fitsname, overwrite=True)
             stats = et.get_flux(fitsname, ra, dec)
             flux0 = resflux
@@ -278,3 +282,4 @@ class Subtract(Imaging):
             print ('Iteration {}: {} Jy -- {}% of observed flux'.format(iter_num, resflux, round(abs(resflux * 100 / np.abs(pflux))), 2))
         if return_val:
             return np.abs(flux0) * 100 / np.abs(pflux)
+
