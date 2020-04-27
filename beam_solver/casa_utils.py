@@ -381,3 +381,16 @@ def set_to_unflag(dset, script='unflag', delete=False):
     stdout.write(task_opt)
     stdout.close()
     casawrapper.call_casa_script(script + ".py", casa_opt, delete=delete)
+
+def get_freq(dset, outname, script='get_freqs', delete=False):
+    casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
+    task_opt = "import numpy as np\n"
+    task_opt += "ms = casac.table()\n"
+    task_opt += "ms.open('{}/SPECTRAL_WINDOW', nomodify=False)\n".format(dset)
+    task_opt += "freqs = ms.getcol('CHAN_FREQ')\n"
+    task_opt += "ms.close()\n"
+    task_opt += "np.save('{}', freqs)".format(outname)
+    stdout = open(script + ".py", "w")
+    stdout.write(task_opt)
+    stdout.close()
+    casawrapper.call_casa_script(script + ".py", casa_opt, delete=delete)
