@@ -252,8 +252,8 @@ class Subtract(Imaging):
         self.to_fits(imagename + '.model', mod_fitsname, overwrite=True)
         self.remove_image(imagename, del_img=True)
         moddata = ft.get_fitsinfo(mod_fitsname)['data']
-        self.generate_image(imagename, antenna=antenna, niter=0, start=start, stop=stop)
-        #self.generate_image(imagename, antenna=antenna, niter=0, start=start, stop=stop, npix=npix, phasecenter=phasecenter)
+        #self.generate_image(imagename, antenna=antenna, niter=0, start=start, stop=stop)
+        self.generate_image(imagename, antenna=antenna, niter=0, start=start, stop=stop, npix=npix, phasecenter=phasecenter)
         self.to_fits(imagename + '.image', fitsname, overwrite=True)
         stats = et.get_flux(fitsname, ra, dec)
         resflux = stats['gauss_tflux']
