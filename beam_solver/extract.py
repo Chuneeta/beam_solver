@@ -6,12 +6,13 @@ from astropy.modeling import models, fitting
 import pylab
 import copy
 
-def get_flux(fitsfile, ra, dec):
+def get_flux(fitsfile, ra, dec, const=1.):
     """
     Returns the statistics obtained from the desired or selected region
     fitsfile: Input fitsfile
     ra : Right ascension in degrees
     dec : Declination in degrees
+    const : Number/constant by which the radius of the selected area is multiplied. If constant is 1, the selected area will be cinfined to the radius of the PSF, if const < 1, then selected area is less than the radius and if const > 1 selected area has a radius > than the PSF. Default is 1.
     """
     fitsinfo = ft.get_fitsinfo(fitsfile)
     imdata = fitsinfo['data']
@@ -43,7 +44,7 @@ def get_flux(fitsfile, ra, dec):
         m_axis = np.arange(0, nyaxis)
         ll, mm = np.meshgrid(l_axis, m_axis)
         R = np.sqrt((ll - ra_pix)**2 + (mm - dec_pix)**2)
-        select = R < 2 * bm_radius_px
+        select = R < const * bm_radius_px
         imdata_select = imdata[select]
         maxval = np.nanmax(imdata_select)
         minval = np.nanmin(imdata_select)
@@ -68,7 +69,7 @@ def get_flux(fitsfile, ra, dec):
                 gauss_mod = fit_p(mod, ll, mm, gauss_data)
         gauss_peak = gauss_mod.amplitude.value
         fitted_data = gauss_mod(ll, mm)
-        select_err = R < 4 * bm_radius_px
+        select_err = R < 2 * bm_radius_px
         err_data = copy.deepcopy(imdata)
         err_data[~select_err] = 0
         residual = imdata - fitted_data
