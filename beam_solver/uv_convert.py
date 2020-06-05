@@ -10,7 +10,7 @@ class UVConvert(object):
         convert them to measurements.
         Parameters
         ----------
-        uvfile : str
+        uvh5_file : str
             Input hdf5 file containing visibilities are required metadata.
         outfile : str
             Output name of the measurement set file
@@ -29,7 +29,7 @@ class UVConvert(object):
         phs : float, optional
             Julian date at which to phase the visibilities. By default the visibilities are phased to middle timestamp of the file
         del_uvfits : boolean, optional
-            If True, deleted the uvfits file that is created during the conversion from uvfile to ms.
+            If True, deleted the uvfits file that is created during the conversion from uvh5_file to ms.
             Default is False.
         script : string, optional
             Casa script created on-the-fly to execute the casa task.
@@ -48,8 +48,8 @@ class UVConvert(object):
         print ('Phasing visibilities to {}'.format(phs_time))
         uvd.phase_to_time(Time(phs_time, format='jd', scale='utc'))
         # converting to uvfits
-        uvfits = self.uvfile + '.uvfits'
-        print ('Converting {} to {}'.format(self.uvfile, uvfits))
+        uvfits = self.uvh5_file + '.uvfits'
+        print ('Converting {} to {}'.format(self.uvh5_file, uvfits))
         uvd.write_uvfits(uvfits, spoof_nonessential=True)
         # converting to mset
         if clobber:
