@@ -3,9 +3,10 @@ import numpy as np
 import hera_cal as hc
 import pyuvdata
 from beam_solver import get_redbls as gr
+from hera_cal.io import HERAData, HERACal
+from hera_cal.apply_cal import calibrate_in_place
+from hera_cal.redcal import get_reds
 import copy
-import pylab
-import IPython
 
 # polarization mapping that are used in hera_cal
 pols_dict = {'xx': 'ee',
@@ -154,3 +155,53 @@ def generate_residual(uvfile, uvfits, omni_calfits, abs_calfits, pol, outfile=No
     uvd_new.data_array = res_data
     uvd_new.flag_array = flag_data
     uvd_new.write_miriad(outfile, clobber=clobber)
+
+def generate_residual_IDR2_2(uvh5_file, omni_vis, omni_calfits, abs_calfits, outfile, clobber=False):
+    # reading uvh5 data file
+    hd = HERAData(uvh5_file)
+    data, flags, nsamples = hd.read(polarizations=['ee', 'nn'])
+
+    # reading omnical model visibilities
+    hd_oc = HERAData(omni_vis)
+    omnivis, omnivis_flags, _ = hd_oc.read()
+
+    uvo = pyuvdata.UVData()
+    uvo.read_uvh5(omni_vis)
+    
+    # reading calfits file
+    hc = HERACal(omni_calfits)
+    oc_gains, oc_flags, oc_quals, oc_total_quals = hc.read()
+
+    hc = HERACal(abs_calfits)
+    ac_gains, ac_flags, ac_quals, ac_total_quals = hc.read() 
+
+    # calibrating the data
+    abscal_data, abscal_flags = copy.deepcopy(data), copy.deepcopy(flags)
+    calibrate_in_place(abscal_data, ac_gains, data_flags=abscal_flags, cal_flags=ac_flags)
+
+    res_data, res_flags = copy.deepcopy(hd.data_array), copy.deepcopy(hd.flag_array) 
+    resdata, resflags = copy.deepcopy(abscal_data), copy.deepcopy(abscal_flags)
+    for i, p in enumerate(['ee', 'nn']):
+        # reading omnical model visibilities
+        hd_oc = HERAData(omni_vis)
+        omnivis, omnivis_flags, _ = hd_oc.read(polarizations=[p])
+        mod_bls = list(omnivis.keys())
+        red_bls = get_reds(hd.antpos, pols=p)
+        red = gr.RBL(red_bls)
+        for mbl in mod_bls:
+            bl_grp = red[tuple(mbl[0:2]) + ('J{}'.format(p),)]
+            for blp in bl_grp:
+                bl = (blp[0], blp[1], p)
+                inds = hd.antpair2ind(bl)
+                omnivis_scaled = omnivis[mbl] * oc_gains[(blp[0], 'J{}'.format(p))] * np.conj(oc_gains[(blp[1], 'J{}'.format(p))])
+                omnivis_scaled /= (ac_gains[(blp[0], 'J{}'.format(p))] * np.conj(ac_gains[(blp[1], 'J{}'.format(p))]))
+                resdata[bl] = abscal_data[bl] - omnivis_scaled
+                resflags[bl] = abscal_flags[bl]
+                res_data[inds, 0, : ,i] = resdata[bl]
+                res_flags[inds, 0, :, i] = resflags[bl]
+
+    # writing to file
+    hd.data_array = res_data
+    hd.flag_array = res_flags
+    hd.write_uvh5(outfile, clobber=clobber)
+    
