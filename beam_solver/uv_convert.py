@@ -4,20 +4,20 @@ import pyuvdata
 import os
 
 class UVConvert(object):
-    def __init__(self, uvfile, outfile=None):
+    def __init__(self, uvh5_file, outfile=None):
         """
         Object to store measurement sets of Miriad files containing visibilities in order to
         convert them to measurements.
         Parameters
         ----------
         uvfile : str
-            Input miriad file containing visibilities are required metadata.
+            Input hdf5 file containing visibilities are required metadata.
         outfile : str
             Output name of the measurement set file
         """
-        self.uvfile = uvfile
+        self.uvfile = uvh5_file
         if outfile is None:
-            self.outfile = '{}.ms'.format(self.uvfile)
+            self.outfile = '{}.ms'.format(self.uvh5_file)
         else:
             self.outfile = outfile
 
@@ -41,7 +41,7 @@ class UVConvert(object):
             Default is False    
         """
         uvd = pyuvdata.UVData()
-        uvd.read_miriad(self.uvfile)
+        uvd.read_uvh5(self.uvh5_file)
         times = uvd.time_array
         phs_time = times[int(len(times)/2.)] if phs is None else phs
 
