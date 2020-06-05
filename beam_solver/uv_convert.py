@@ -15,7 +15,7 @@ class UVConvert(object):
         outfile : str
             Output name of the measurement set file
         """
-        self.uvfile = uvh5_file
+        self.uvh5_file = uvh5_file
         if outfile is None:
             self.outfile = '{}.ms'.format(self.uvh5_file)
         else:
