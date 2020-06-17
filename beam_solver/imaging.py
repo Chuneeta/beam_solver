@@ -187,7 +187,7 @@ class Subtract(Imaging):
         imagename : str
             Name of the output image
         fitsname : str
-            Name of output fits file. By defualt, it return <imagename>.fits
+            Name of output fits file. By default, it return <imagename>.fits
         niter : int
             Number of deconvolution interation. By default it is 500.
         antenna : str
@@ -273,7 +273,7 @@ class Subtract(Imaging):
             os.system('cp -rf {} {}'.format(self.ms, res_ms))
             ct.subtract_model_ant(self.ms, antenna)
             self.remove_image(imagename, del_img=True)
-            self.generate_image(imagename, antenna=antenna, niter=0, start=start, stop=stop)
+            self.generate_image(imagename, antenna=antenna, niter=niter, start=start, stop=stop, npix=npix, phasecenter=phasecenter)
             self.to_fits(imagename + '.image', fitsname, overwrite=True)
             stats = et.get_flux(fitsname, ra, dec)
             flux0 = resflux
