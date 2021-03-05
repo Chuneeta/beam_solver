@@ -1,11 +1,13 @@
 from beam_solver.data import DATA_PATH
 from beam_solver import imaging as im
 from beam_solver import uv_convert as uc
+from beam_solver import coord_utils as crd
 import nose.tools as nt
+import numpy as np
 import os, sys
 import glob
 
-uvfile = os.path.join(DATA_PATH, 'zen.2457698.40355.xx.HH.uvcA')
+uvfile = os.path.join(DATA_PATH, 'zen.2457698.40355.xx.HH.uvcA.h5')
 uvfits = uvfile + '.uvfits'
 msfile = uvfile + '.ms'
 imagename = os.path.join(DATA_PATH, '2457698.40355.xx')
@@ -91,5 +93,13 @@ class Test_Subtract():
         newmsfile = msfile.replace('.ms', '.copy.ms')
         os.system('cp -rf {} {}'.format(msfile, newmsfile))
         sub = im.Subtract(newmsfile, src_dict)
-        sub.subtract_model(imagename, fitsname=fitsname)
+        sub.subtract_model(imagename, antenna='1', fitsname=fitsname)
         nt.assert_true(os.path.exists(fitsname))
+
+    def test_srcdict_to_list(self):
+        sub = im.Subtract(msfile, src_dict)
+        ras, decs = sub.srcdict_to_list()
+        nt.assert_equal(len(ras), 1)
+        nt.assert_equal(len(decs), 1)
+        nt.assert_equal(ras[0], crd.hms2deg('1:55:33.98'))
+        nt.assert_equal(decs[0], crd.dms2deg('-28:37:32.70'))

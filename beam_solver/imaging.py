@@ -28,7 +28,7 @@ class Imaging(object):
         """
         ct.flag_antenna(self.ms, antenna)
 
-    def generate_image(self, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0, phasecenter='', gridmode='', wprojplanes=1024, script='clean', del_script=True):
+    def generate_image(self, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0, uvsign='>', phasecenter='', gridmode='', wprojplanes=1024, script='clean', del_script=True):
         """
         Generates multi-frequency synthesized images using all baselines within the specified cutoff threshold
 
@@ -62,17 +62,20 @@ class Imaging(object):
             Stopping/endign frequency channel. Default is 900.
         uvlength: float
             UV length in metres equal to or smaller to exclude while generating the image. Default is 0.        
-        phasecenter: str
+        uvsign: string
+            either '>' or '<' for cut in uvlength. For example if '>30' all baselines greater than 30 m 
+            will be used for imaging.
+        phasecenter: string
             Pointing center of the image
         gridmode: string
             Gridding kernel for FFT-based transforms
-    wprojplanes : int
-        Number of w-projection planes for convolution; -1 => automatic determination
+        wprojplanes : int
+            Number of w-projection planes for convolution; -1 => automatic determination
         del_script : boolean
             If True, deletes the casa script used to execute the CASA clean task.
             Default is True.
         """
-        ct.imaging(self.ms, imagename, antenna=antenna, cellsize=cellsize, npix=npix, niter=niter, threshold=threshold, weighting=weighting, start=start, stop=stop, uvlength=uvlength, phasecenter=phasecenter, gridmode=gridmode, wprojplanes=wprojplanes, script=script, delete=del_script)
+        ct.imaging(self.ms, imagename, antenna=antenna, cellsize=cellsize, npix=npix, niter=niter, threshold=threshold, weighting=weighting, start=start, stop=stop, uvlength=uvlength, uvsign=uvsign, phasecenter=phasecenter, gridmode=gridmode, wprojplanes=wprojplanes, script=script, delete=del_script)
             
     def remove_image(self, imagename, del_img=False):
         """
@@ -201,8 +204,8 @@ class Subtract(Imaging):
             self.remove_image(imagename, del_img=True)
 
     def srcdict_to_list(self):
-        ras = [cd.hms2deg(self.srcdict[key][0]) for key in self.srcdict.keys()]
-        decs = [cd.dms2deg(self.srcdict[key][1]) for key in self.srcdict.keys()]
+        ras = [crd.hms2deg(self.srcdict[key][0]) for key in self.srcdict.keys()]
+        decs = [crd.dms2deg(self.srcdict[key][1]) for key in self.srcdict.keys()]
         return ras, decs
 
     def extract_flux(self, fitsname, ras, decs):
@@ -217,7 +220,7 @@ class Subtract(Imaging):
         dec_str = crd.deg2dms(dec)
         return 'J2000 {} {}'.format(ra_str, dec_str)
 
-    def subtract_model(self, imagename, fitsname=None, niter=500, antenna='', start=200, stop=900, maxiter=20):
+    def subtract_model(self, imagename, fitsname=None, niter=500, antenna='', start=200, stop=900, maxiter=10,  ms_ext='ms'):
         if fitsname is None:
             fitsname = imagename + '.fits'
         self.make_image(imagename, fitsname, niter=niter, antenna=antenna, start=start, stop=stop, overwrite=True)
@@ -232,15 +235,19 @@ class Subtract(Imaging):
             operation = 'add' if orig_flux < 0 else 'subtract'
             infile = 'src_component.dat'
             outfile = 'src_component.cl'
+            res_ms = self.ms.replace('.{}'.format(ms_ext), '.optsub.{}'.format(ms_ext))
             iter_num = 1
             while (np.abs(flux) >= 0.1 * np.abs(orig_flux) and np.abs(flux) <= np.abs(flux0) and iter_num <= maxiter):
                 ct.generate_complist_input([ras[i]], [decs[i]], [np.abs(flux)], [0], [freq * 1e-6], output=infile)
                 ct.create_complist(infile, outfile)
                 ct.ft(self.ms, complist=outfile, start=start, stop=stop)
+                if os.path.exists(res_ms): os.system('rm -rf {}'.format(res_ms))
+                os.system('cp -rf {} {}'.format(self.ms, res_ms))
                 ct.subtract_model_ant(self.ms, antenna, operation=operation)
                 self.make_image(imagename, fitsname, niter=niter, antenna=antenna, start=start, stop=stop, overwrite=True)
                 flux0 = flux # flux obtained at previous iteration
                 flux = self.extract_flux(fitsname, [ras[i]], [decs[i]])[0]
+                print ('Iteration {}: {} {} Jy -- {}% of observed flux'.format(iter_num, flux0,  flux, round(flux / flux0 * 100, 2)))
                 iter_num += 1
 
     def subtract_sources(self, ra, dec, pflux, imagename, fitsname=None, niter=0, antenna='', start=200, stop=900, npix=30, gain=0.3, maxiter=10, return_val=False, ms_ext='ms'):
@@ -259,7 +266,7 @@ class Subtract(Imaging):
         resflux = stats['gauss_tflux']
         flux0 = resflux
         resdata = moddata
-        iter_num = 1
+        iter_num = 1 
         res_ms = self.ms.replace('.{}'.format(ms_ext), '.optsub.{}'.format(ms_ext))
         print ('Iteration {}: {} Jy -- {}% of observed flux'.format(iter_num, resflux, round(abs(resflux * 100 / np.abs(pflux))), 2))
         while (np.abs(resflux) > 1 / 10. * np.abs(pflux) and np.abs(resflux) <= np.abs(flux0) and iter_num < maxiter):
@@ -267,7 +274,7 @@ class Subtract(Imaging):
             ft.write_fits(mod_fitsname, gain * resdata, pmod_fitsname, overwrite=True)
             resdata -= gain * resdata
             mod_imagename = mod_fitsname.replace('.fits', '.image')
-            ct.importfits(mod_fitsname, mod_imagename, overwrite=True)  
+            ct.importfits(mod_fitsname, mod_imagename, overwrite=True)
             ct.ft(self.ms, model = mod_imagename)
             if os.path.exists(res_ms): os.system('rm -rf {}'.format(res_ms))
             os.system('cp -rf {} {}'.format(self.ms, res_ms))
@@ -282,4 +289,3 @@ class Subtract(Imaging):
             print ('Iteration {}: {} Jy -- {}% of observed flux'.format(iter_num, resflux, round(abs(resflux * 100 / np.abs(pflux))), 2))
         if return_val:
             return np.abs(flux0) * 100 / np.abs(pflux)
-
