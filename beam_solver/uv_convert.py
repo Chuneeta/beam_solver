@@ -41,16 +41,16 @@ class UVConvert(object):
             Default is False    
         """
         uvd = pyuvdata.UVData()
-        uvd.read_uvh5(self.uvh5_file)
+        uvd.read_uvh5(self.uvh5_file, run_check=False)
         times = uvd.time_array
-        phs_time = times[int(len(times)/2.)] if phs is None else phs
-
-        print ('Phasing visibilities to {}'.format(phs_time))
-        uvd.phase_to_time(Time(phs_time, format='jd', scale='utc'))
+        if not uvd.phase_type is 'phased':
+            phs_time = times[int(len(times)/2.)] if phs is None else phs
+            print ('Phasing visibilities to {}'.format(phs_time))
+            uvd.phase_to_time(Time(phs_time, format='jd', scale='utc'))
         # converting to uvfits
         uvfits = self.uvh5_file + '.uvfits'
         print ('Converting {} to {}'.format(self.uvh5_file, uvfits))
-        uvd.write_uvfits(uvfits, spoof_nonessential=True)
+        uvd.write_uvfits(uvfits, spoof_nonessential=True, run_check=False)
         # converting to mset
         if clobber:
             if os.path.exists(self.outfile):
