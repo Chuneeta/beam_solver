@@ -4,30 +4,6 @@ import os, sys
 from beam_solver import casawrapper
 from beam_solver import coord_utils as cd
 
-def uvfits2ms(uvfits, outfile=None, script='uvfits2ms', delete=True):
-    """
-    Converts uvfits to measurement sets 
-    Parameters
-    ----------
-    uvfits: string
-        Uvfits files containing visibilities and the corresponding metadata
-    outfile: string
-        Name of output measurement set (MS) file. Default id <uvfits>.ms
-    script: string
-        Name of the casapy script will be created on-the-fly. Default is uvfits2ms
-    overwrite : boolean
-        Overwrites any existing file. Default is False.
-    delete: boolean 
-        Deletes the casapy script that was created on-the-fly after execution.
-        Default is True.
-    """
-    if outfile is None:
-        outfile = uvfits.replace('.uvfits', '.ms')
-    print ('Converting {} to {}'.format(uvfits, outfile))
-    casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
-    task_opt = casawrapper.create_casa_options(vis="'{}'".format(outfile), fitsfile="'{}'".format(uvfits))
-    casawrapper.call_casa_task(task='importuvfits', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
-
 def ms2uvfits(dset, outfile=None, script='ms2uvfits', overwrite=False, delete=True):
     """
     Converts measurement sets to uvfits files
@@ -45,11 +21,35 @@ def ms2uvfits(dset, outfile=None, script='ms2uvfits', overwrite=False, delete=Tr
         Deletes the casapy script that was created on-the-fly after execution.
     """
     if outfile is None:
+        print (dset)
         outfile = dset.replace('.ms', '.uvfits')
     print ('Converting {} to {}'.format(dset, outfile))
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
     task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), fitsfile="'{}'".format(outfile), overwrite="{}".format(overwrite))
     casawrapper.call_casa_task(task='exportuvfits', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
+
+def uvfits2ms(uvfits, outfile=None, script='uvfits2ms', overwrite=False, delete=True):
+    """
+    Converts measurement sets to uvfits files
+    Parameters
+    ----------
+    dset: string
+        Measurement sets (MS) containing visibilities and the corresponding metadata.
+    outfile: string
+        Name of the output uvfits file. Default is <dset>.uvfits.
+    script: string
+        Name of casapy script that will be create on-the-fly. Default is ms2uvfits.
+    overwrite : boolean
+        Overwrites any existing file. Default is False.
+    delete: boolean
+        Deletes the casapy script that was created on-the-fly after execution.
+    """
+    if outfile is None:
+        outfile = uvfits.replace('.uvfits', '.ms')
+    print ('Converting {} to {}'.format(uvfits, outfile))
+    casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
+    task_opt = casawrapper.create_casa_options(fitsfile="'{}'".format(uvfits), vis="'{}'".format(outfile))
+    casawrapper.call_casa_task(task='importuvfits', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
     
 def flag_antenna(dset, antenna, script='flag_a', delete=True):
     """
@@ -71,7 +71,7 @@ def flag_antenna(dset, antenna, script='flag_a', delete=True):
     task_opt = casawrapper.create_casa_options(vis="'{}'".format(dset), antenna="'{}'".format(antenna))
     casawrapper.call_casa_task(task='flagdata', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)
 
-def imaging(dset, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0, phasecenter='', gridmode='', wprojplanes=1024, script='clean', delete=True):
+def imaging(dset, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, threshold='0Jy', weighting='uniform', start=200, stop=900, uvlength=0, uvsign='>', phasecenter='', gridmode='', wprojplanes=1024, script='clean', delete=True):
     """
     Generates images using all antenna or specific antennas using visibilities from the measurement set (MS)
 
@@ -107,7 +107,10 @@ def imaging(dset, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, 
     stop: int
         Stopping/endign frequency channel. Default is 900.
     uvlength: float
-        Uv length in metres equal to or smaller to exclude while generating the image. Default is 0.
+        UV length in metres equal to or smaller to exclude while generating the image. Default is 0.
+    uvsign: string
+        either '>' or '<' for cut in uvlength. For example if '>30' all baselines greater than 30 m will be used
+        for imaging
     phasecenter: string
         Pointing center of the image
     gridmode: string
@@ -123,7 +126,7 @@ def imaging(dset, imagename, antenna='', cellsize='8arcmin', npix=512, niter=0, 
     antenna_out = 'all' if antenna == '' else antenna
     print ('Imaging using antenna(s) {}'.format(antenna_out))
     casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
-    task_opt = casawrapper.create_casa_options(vis=vis, imagename="'{}'".format(imagename), antenna="'{}'".format(antenna), cell="'{}'".format(cellsize), imsize=[npix,npix], threshold="'{}'".format(threshold), niter="{}".format(niter), spw="'0:{}~{}'".format(start, stop), uvrange="'>{}'".format(uvlength), weighting="'{}'".format(weighting), phasecenter="'{}'".format(phasecenter) ,gridmode="'{}'".format(gridmode), wprojplanes="{}".format(wprojplanes), usescratch=True)
+    task_opt = casawrapper.create_casa_options(vis=vis, imagename="'{}'".format(imagename), antenna="'{}'".format(antenna), cell="'{}'".format(cellsize), imsize=[npix,npix], threshold="'{}'".format(threshold), niter="{}".format(niter), spw="'0:{}~{}'".format(start, stop), uvrange="'{}{}'".format(uvsign, uvlength), weighting="'{}'".format(weighting), phasecenter="'{}'".format(phasecenter) ,gridmode="'{}'".format(gridmode), wprojplanes="{}".format(wprojplanes), usescratch=True)
     casawrapper.call_casa_task(task='clean', script=script, task_options=task_opt, casa_options=casa_opt, delete=delete)    
 
 def exportfits(imagename, fitsname=None, overwrite=False, script='exportfits', delete=True):
@@ -390,6 +393,19 @@ def get_freq(dset, outname, script='get_freqs', delete=False):
     task_opt += "freqs = ms.getcol('CHAN_FREQ')\n"
     task_opt += "ms.close()\n"
     task_opt += "np.save('{}', freqs)".format(outname)
+    stdout = open(script + ".py", "w")
+    stdout.write(task_opt)
+    stdout.close()
+    casawrapper.call_casa_script(script + ".py", casa_opt, delete=delete)
+
+def change_pc(dset, script='pc', delete=False):
+    casa_opt = casawrapper.create_casa_options(nologger='0', nogui='0', nologfile='0')
+    task_opt = "import numpy as np\n"
+    task_opt += "ms = casac.table()\n"
+    task_opt += "ms.open('{}/FIELD', nomodify=False)\n".format(dset)
+    task_opt += "pc =np.array([[[ 0.87707669]],[[-0.53722607]]])\n"
+    task_opt += "ms.putcol('PHASE_DIR', pc)\n"
+    task_opt += "ms.close()"
     stdout = open(script + ".py", "w")
     stdout.write(task_opt)
     stdout.close()
