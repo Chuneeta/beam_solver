@@ -107,15 +107,22 @@ def calc_solint(fitsfile, nants, inttime):
     solint = (std / mxval)**2 * (inttime * (nants - 3)) / 9
     return solint
 
-def plot_fitsfile(fitsfile, cmap='gray', vmin=None, vmax=None):
+def plot_fitsfile(fitsfile, cmap='gray', vmin=None, vmax=None, savefig=False, figname=''):
     _info = get_fitsinfo(fitsfile)
     hdr = _info['hdr']
+    data = _info['data']
+    if vmin is None: vmin = np.min(data)
+    if vmax is None: vmax = np.max(data)
     my_wcs = wcs.WCS(hdr, naxis=[wcs.WCSSUB_CELESTIAL])
     fig = pylab.figure()
     ax = fig.add_subplot(111, projection=my_wcs)
-    im = ax.imshow(_info['data'].squeeze(), aspect='auto', vmin=vmin, vmax=vmax, cmap=cmap)
+    im = ax.imshow(data.squeeze(), aspect='auto', origin='lower', vmin=vmin, vmax=vmax, cmap=cmap)
     cbar = pylab.colorbar(im, ax=ax)
     ax.grid(ls='dotted', color='white')
     ax.coords[0].set_axislabel('RA (deg)')
     ax.coords[1].set_axislabel('DEC (deg)')
-    pylab.show()
+    if savefig:
+        pylab.savefig(figname)
+        pylab.close()
+    else:
+        pylab.show()
