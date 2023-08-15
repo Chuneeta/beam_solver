@@ -52,5 +52,5 @@ Requires installation of `nose` package.
 
 Bug reports or feature requests are also very welcome, please add them to the
 issue log after verifying that the issue does not already exist.
-Contact cnunhokee@berkeley.edu for any queries or comments.
+Contact ridhima.nunhokee@curtin.edu.au for any queries or comments.
 
